@@ -1,0 +1,116 @@
+---
+title: 'Case Study: k-NN and palmerpenguins'
+author: "Emma Grossman"
+date: "4/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(palmerpenguins)
+library(class)
+library(gmodels)
+```
+
+## Import data
+```{r}
+penguins <- penguins %>%
+  filter(!is.na(bill_length_mm))
+```
+
+## Normalize the continuous data
+
+```{r}
+normalize <- function(x){
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+```
+
+
+```{r}
+penguins_n <- as.data.frame(lapply(penguins[3:6], normalize))
+```
+
+
+## Create a testing and training data set
+
+```{r}
+set.seed(1223)
+smp_size <- floor(0.75 * nrow(penguins))
+train_id <- sample(1:nrow(penguins), smp_size)
+penguins_train <- penguins_n[train_id,]
+penguins_test  <- penguins_n[-train_id,]
+```
+
+Create label vectors of response categories:
+```{r}
+penguins_train_labels <- penguins[train_id, 1]
+penguins_test_labels  <- penguins[-train_id, 1]
+```
+
+```{r}
+sqrt(256)
+```
+
+Let's chose k = sqrt(256) = 16, since we have three levels of our response, a k of 16 will not result in a tie. 
+
+```{r}
+penguins_test_pred <- knn(train = penguins_train, test = penguins_test,
+                           cl = penguins_train_labels[,1, drop = TRUE], 
+                          k = 16) # wouldn't work without including [,1, drop = TRUE]
+penguins_test_pred
+```
+
+
+
+Now to look at the classification table:
+```{r}
+CrossTable(x = penguins_test_labels[,1, drop = TRUE], y = penguins_test_pred,
+           prop.chisq = FALSE) # wouldn't work without including [,1, drop = TRUE]
+```
+
+Only two penguins were misclassified!
+
+## Try various k
+
+Create a function to do this because why not? why shouldn't I?
+
+```{r}
+k_NN_dif_k <- function(k, seed){
+  set.seed(seed)
+  smp_size <- floor(0.75 * nrow(penguins))
+  
+  train_id <- sample(1:nrow(penguins), smp_size)
+  penguins_train <- penguins_n[train_id,]
+  penguins_test  <- penguins_n[-train_id,]
+  
+  penguins_train_labels <- penguins[train_id, 1]
+  penguins_test_labels  <- penguins[-train_id, 1]
+  
+  penguins_test_pred <- knn(train = penguins_train, test = penguins_test,
+                           cl = penguins_train_labels[,1, drop = TRUE], 
+                          k = k)
+  
+  return(CrossTable(x = penguins_test_labels[,1, drop = TRUE], y = penguins_test_pred,
+           prop.chisq = FALSE))
+}
+```
+
+```{r}
+k_NN_dif_k(k = 1, seed = 208)
+```
+
+So with k = 1, there were again, 2 penguins misclassified.
+
+```{r}
+k_NN_dif_k(k = 5, seed = 21035)
+```
+
+With k = 5, only 1 penguins was misclassified.
+
+```{r}
+k_NN_dif_k(k = 11, seed = 211)
+```
+
+Again, with k = 10 only 1 penguin was misclassified.
