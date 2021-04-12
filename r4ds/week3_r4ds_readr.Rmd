@@ -1,0 +1,228 @@
+---
+title: "Data Import with readr"
+author: "Emma Grossman"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+`readr` turns files into data frames.
+
+- `read_cvs()`: comma-delimited files
+- `read_csv2()`: semicolon-separated files (common in countries where the comma is used as the decimal place)
+- `read_tsv()`:tab-delimited files
+- `read_delim()`: allows the user to specify any delimiter
+- `read_fwf()`: fixed-width files
+- `read_log()`: Apache style log files
+
+We can supply an inline CSV file
+```{r}
+read_csv("a,b,c
+         1,2,3
+         4,5,6")
+```
+
+`read_csv()` is using the first line of data as column names. We can change this a couple ways:
+```{r}
+read_csv("The first line of metadata
+         The second line of metadata
+         x,y,z
+         1,2,3", skip = 2)
+```
+
+Or by using comments:
+```{r}
+read_csv("# A comment I want to skip
+         x,y,z
+         1,2,3", comment = "#")
+```
+
+If the data do not have column names,
+```{r}
+read_csv("1,2,3\n4,5,6", col_names = FALSE)
+```
+
+We can also pass column names in as a vector:
+```{r}
+read_csv("1,2,3\n4,5,6", col_names =c("x","y","z"))
+```
+
+```{r error=TRUE}
+read_csv("a,b\n1,2,3\n4,5,6")
+read_csv("a,b\n\"1")
+read_csv("a,b\n1,2\na,b")
+read_csv("a;b\n1;3")
+```
+
+Parsing a Vector
+```{r}
+str(parse_logical(c("TRUE","FALSE","NA")))
+str(parse_integer(c("1","2","3")))
+str(parse_date(c("2010-01-01","1979-10-14")))
+```
+
+These parsers are the building blocks for `readr`
+
+```{r}
+parse_integer(c("1","241",".","456"), na = ".")
+```
+
+```{r error = TRUE}
+x <- parse_integer(c("123","345","abc","123.45"))
+```
+
+```{r}
+problems(x)
+```
+
+Parsing numbers is tricky because there is different notation in different countries.
+```{r}
+parse_double("1.23")
+parse_double("1,23", locale = locale(decimal_mark = ","))
+```
+
+`parse_number` ignores non-numeric characters:
+```{r}
+parse_number("$100")
+parse_number("20%")
+parse_number("It cost $123.45")
+```
+
+```{r}
+# Used in America
+parse_number("$123,456,789")
+
+# Used in many parts of Europe
+parse_number(
+  "123.456.789",
+  locale = locale(grouping_mark = ".")
+)
+
+# Used in Switzerland
+parse_number(
+  "123'456'789",
+  locale = locale(grouping_mark = "'")
+)
+```
+
+Strings can also be difficult because there are different encodings. The most common now is UTF-8.
+
+```{r}
+charToRaw("Hadley")
+charToRaw("Emma")
+```
+
+The remainder of subjects in this chapter are things that I know already, so I'm just going to copy the code without much explanation.
+
+### Factors
+
+```{r}
+fruit <- c("apple","banana")
+parse_factor(c("apple","banana", "bananana"), levels = fruit)
+```
+
+
+
+### Dates, Date-Times and Times
+
+```{r}
+parse_datetime("2010-10-01T2010")
+
+# If time is omitted, it will be set to midnight
+parse_datetime("20101010")
+
+parse_date("2010-10-01")
+
+library(hms)
+parse_time("01:10 am")
+parse_time("20:10:01")
+```
+
+```{r}
+parse_date("01/02/15", "%m/%d/%y")
+parse_date("01/02/15", "%d/%m/%y")
+parse_date("01/02/15", "%y/%m/%d")
+
+parse_date("1 janvier 2015", "%d %B %Y", locale = locale("fr"))
+```
+
+
+### Parsing a file
+
+```{r}
+guess_parser("2010-10-01")
+guess_parser("15:01")
+guess_parser(c("TRUE","FALSE"))
+guess_parser(c("1","5","9"))
+guess_parser(c("12,345,678"))
+str(parse_guess("2010-10-10"))
+```
+
+### Problems
+
+```{r}
+challenge <- read_csv(readr_example("challenge.csv"))
+```
+
+
+```{r}
+problems(challenge)
+```
+
+
+```{r}
+challenge <- read_csv(
+  readr_example("challenge.csv"),
+  col_types = cols(
+    x = col_double(),
+    y = col_character()
+  )
+)
+
+tail(challenge)
+```
+
+```{r}
+challenge2 <- read_csv(
+  readr_example("challenge.csv"),
+  guess_max = 1001
+)
+```
+
+```{r}
+# read in data as character vectors
+
+challenge2 <- read_csv(
+  readr_example("challenge.csv"),
+  col_types = cols(.default = col_character())
+)
+```
+
+```{r}
+df <- tribble(
+  ~x, ~y,
+  "1","1.21",
+  "2","2.32",
+  "3","4.56"
+)
+df
+```
+
+```{r}
+type_convert(df)
+```
+
+
+
+
+
+
+
+
+
+
+
