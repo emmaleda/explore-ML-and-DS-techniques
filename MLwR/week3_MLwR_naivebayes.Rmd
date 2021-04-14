@@ -1,0 +1,188 @@
+---
+title: "Probabilistic Learning - Classification Using Naive Bayes"
+author: "Emma Grossman"
+date: "4/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Understanding Naive Bayes
+
+Bayesian classifiers use training data to obtain probability of each outcome based on evidence provided by feature values. It uses these probabilities to classify unlabeled data later on. Bayesian classifiers work particularly well when there are variables with weak effects; combining all variables with weak effects could have a large impact on the model.
+
+... Lots of information about probabilities...
+
+## The Naive Bayes algorithm
+
+Naive Bayes isn't the only Bayesian algorithm but it is the most popular because of its early success in text classification.
+
+Strengths:
+- simple, fast and effective
+- does well with noisy and missing data
+- few examples required but also excels with large number of examples
+- easy to obtain estimated probability for prediction
+
+Weaknesses:
+- relies on often-faulty assumption of equally important and independent features
+- not ideal for datasets with may numeric features
+- estimated probabilities are less reliable than the predicted classes
+
+It is called "naive" because it makes some "naive" assumptions about the data, like that all features are equally important and independent, which is rarely the case. The algorithm still performs fairly well, however when these assumptions are violated.
+
+It assumes **class-conditional independence** which means that events are independent so long as they are conditioned on the same class value.
+
+## The Laplace estimator
+
+If one of  the variables we are considering has a zero, this makes our outcome probabilities 0 and 1 (assuming two outcomes), which is unlikely. To counter this, we use the **Laplace estimator**, which adds a small number to each count to ensure each feature has a non-zero probability of occurring with each class. The number added to each count is almost always 1.
+
+The Laplace estimator was not added to our prior probabilities, though it was added to the numerator and denominator of the likelihoods.
+
+## Using numeric features with Naive Bayes
+
+Naive Bayes works with categorical data, so to include numeric features, we must **discretize** them by placing them into **bins**, called **binning**. This method works well with a large training data set.
+
+The first method for putting continuous data into discrete bins is to find natural categories, or **cut points**. With no obvious cut points, we can bin the data using quantiles. We need to keep in mind that we are reducing our information by discretizing our continuous variables, so it is important to strike a balance between too many bins (less information loss) and too few bins (more information loss).
+
+# Example - Filtering mobile phone spam with the Naive Bayes algorithm
+
+## Step 1 - collecting data
+
+## Step 2 - exploring and preparing the data
+
+```{r}
+SMSSpamCollection <- read.delim("~/Documents/School/OSU/6. Spring 2021/R&C/explore-ML-and-DS-techniques/MLwR/smsspamcollection/SMSSpamCollection", 
+                                header=FALSE, stringsAsFactors = FALSE)
+
+str(SMSSpamCollection)
+
+SMS_raw <- SMSSpamCollection %>%
+  mutate(
+    type = as.factor(V1),
+    text = V2
+  )%>%
+  select(c(type, text))
+```
+
+
+```{r}
+table(SMS_raw$type)
+```
+
+### Data preparation - cleaning and standardizing text data
+
+`tm` is a text mining package in R that allows us to work easily with data.
+```{r}
+# install.packages("tm")
+library(tm)
+```
+
+We need to create a **corpora** for our data.
+
+```{r}
+sms_corpus <- VCorpus(VectorSource(SMS_raw$text))
+print(sms_corpus)
+```
+
+```{r}
+inspect(sms_corpus[1:2])
+```
+
+To view the content of a text message, we must use `as.character()`
+```{r}
+as.character(sms_corpus[[1]])
+```
+
+```{r}
+lapply(sms_corpus[1:2], as.character)
+```
+
+
+We want to now standardize our corpus so that punctuation and capitalization isn't getting in the way of our analysis.
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus,
+                           content_transformer(tolower))
+```
+
+
+Let's check if this worked as expected:
+```{r}
+as.character(sms_corpus[[1]])
+as.character(sms_corpus_clean[[1]])
+```
+
+We can continue cleaning up by removing any numbers found in the texts.
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, removeNumbers)
+```
+
+We'll use the `stopwords()` function to remove **stop words** like *to, and, but,* and *or* which help English make sense but don't provide any useful information.
+
+
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, removeWords, stopwords())
+```
+
+We can also remove punctuation.
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, removePunctuation)
+```
+
+
+We can also use **stemming** which is a process that reduces words to their root form. *learned, learning,* and *learns* would be stripped of their suffixes so that the machine learning algorithm won't treat different forms of a word as different words.
+
+The `tm` package uses the `SnowballC` package to stem words, but it is not automatically installed by default.
+```{r}
+# install.packages("SnowballC")
+library(SnowballC)
+wordStem(c("learn", "learned", "learning", "learns"))
+```
+
+```{r}
+sms_corpus_clean <- tm_map(sms_corpus_clean, stemDocument)
+```
+
+After all of these modifications, our text variable is left with blank spaces that once separated the removed pieces. Let's also remove these.
+```{r}
+sms_corpus_clean <-  tm_map(sms_corpus_clean, stripWhitespace)
+```
+
+Let's look at a comparison of before and after the modifications.
+```{r}
+lapply(sms_corpus[1:3], as.character)
+lapply(sms_corpus_clean[1:3], as.character)
+```
+
+
+### Data preparation - splitting text documents into words
+
+We now want to split the messages into individual terms with **tokenization**. We can do this with `DocumentTermMatrix()`, which creates a data structure called a **document-term matrix (DTM)**: rows are documents and columns are terms. These are called **sparse matrix** because there are many zeros in each row.
+```{r}
+sms_dtm <- DocumentTermMatrix(sms_corpus_clean)
+```
+
+We can set arguments of `DocumentTermMatrix()` to do the preprocessing that we performed manually, but there is a slight difference.
+```{r}
+sms_dtm2 <- DocumentTermMatrix(sms_corpus, control = list(
+  tolower = TRUE,
+  removeNumbers = TRUE,
+  stopwords = TRUE,
+  removePunctuation = TRUE,
+  stemming = TRUE
+))
+```
+
+```{r}
+sms_dtm
+sms_dtm2
+```
+
+The reasons these are different is because of how we ordered the preprocessing steps. `DocumentTermMatrix()` applies its cleanup functions to the text after the have been split into words so some words are split differently. Order of operations matter.
+
+### Data preparation - creating training and test datasets
+
+
+
