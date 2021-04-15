@@ -2,7 +2,7 @@
 title: 'Week 3: Tibbles with tibble'
 author: "Emma Grossman"
 date: "4/10/2021"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}

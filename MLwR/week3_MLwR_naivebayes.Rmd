@@ -2,7 +2,7 @@
 title: "Probabilistic Learning - Classification Using Naive Bayes"
 author: "Emma Grossman"
 date: "4/14/2021"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -183,6 +183,142 @@ sms_dtm2
 The reasons these are different is because of how we ordered the preprocessing steps. `DocumentTermMatrix()` applies its cleanup functions to the text after the have been split into words so some words are split differently. Order of operations matter.
 
 ### Data preparation - creating training and test datasets
+
+```{r}
+set.seed(822)
+smp_size <- floor(0.75 * nrow(sms_dtm))
+train_id <- sample(1:nrow(sms_dtm), smp_size)
+sms_dtm_train <- sms_dtm[train_id,]
+sms_dtm_test  <- sms_dtm[-train_id,]
+```
+
+It will be convenient later on to have the labels corresponding the the testing and training data set, so let's go ahead and create them now.
+```{r}
+sms_train_labels <- SMS_raw[train_id,]$type
+sms_test_labels  <- SMS_raw[-train_id,]$type
+```
+
+And let's now confirm that the proportions of our training/testing data are about equal.
+```{r}
+prop.table(table(sms_train_labels))
+prop.table(table(sms_test_labels))
+```
+
+Since both data sets contain about 13\% spam data, it seems the spam messages were divided evenly between the data sets.
+
+### Visualizing text data - word clouds
+```{r}
+# install.packages("wordcloud")
+library(wordcloud)
+```
+
+Let's put this in action.
+```{r}
+wordcloud(sms_corpus_clean, min.freq = 50, random.order = FALSE)
+# default min.freq is 3
+# bc FALSE, words are plotting in decrease frequency
+```
+
+Let's see what the wordcloud looks like split but spam and not spam.
+```{r}
+spam <- SMS_raw %>%
+  filter(type == "spam")
+ham <- SMS_raw %>%
+  filter(type == "ham")
+
+wordcloud(spam$text, max.words = 40, scale = c(3, 0.5))
+wordcloud(ham$text, max.words = 40, scale = c(3, 0.5))
+# max.words looks at the 40 most common words
+# scale adjusts the max and min font size
+```
+
+If there is not a lot of overlap in the common words of our word cloud, Naive Bayes will likely be very successful.
+
+
+### Data preparation - creating indicator features for frequent words
+
+Since there are so many unique words in all of the texts, we can reduce the number of features by eliminating words that appear in less than 5 messages.
+
+We can use the `findFreqTerms()` function which takes a DTM and returns a character vector containing the words that appear a specified number of times.
+
+```{r}
+sms_freq_words <- findFreqTerms(sms_dtm_train, 5)
+str(sms_freq_words)
+```
+
+So, there are 1144 words appearing in at least 5 different text messages.
+
+Now we want to subset and only include these 1144 words.
+```{r}
+sms_dtm_freq_train <- sms_dtm_train[, sms_freq_words]
+sms_dtm_freq_test  <- sms_dtm_test[, sms_freq_words]
+```
+
+
+Since Naive Bayes is expecting categorical data, we need to convert all of our features to categorical data.
+```{r}
+convert_counts <- function(x){
+  x <- ifelse(x > 0, "Yes", "No")
+}
+```
+
+We can apply this function to all of the features in our data with `apply()`.
+```{r}
+# MARGIN = 2 tells apply() to apply the function to the columns
+sms_train <- apply(sms_dtm_freq_train, MARGIN = 2, convert_counts)
+sms_test  <- apply(sms_dtm_freq_test,  MARGIN = 2, convert_counts)
+```
+
+## Step 3 - training a model on the data 
+
+We're going to use the Naive Bayes estimator in the `e1071` package.
+```{r}
+# install.packages("e1071")
+library(e1071)
+
+sms_classifier <- naiveBayes(sms_train, sms_train_labels)
+```
+
+
+## Step 4 - evaluating the model performance 
+
+```{r}
+sms_test_pred <- predict(sms_classifier, sms_test)
+```
+
+And let's look at the confusion matrix.
+```{r}
+library(gmodels)
+CrossTable(sms_test_pred, sms_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c("predicted", "actual"))
+```
+
+
+So 18/1144 = 1.57\% SMS messages were misclassifed. This is pretty good!
+
+## Step 5 - improving model performance
+
+We can add a Laplace estimator when training the model.
+```{r}
+sms_classifier2 <- naiveBayes(sms_train, sms_train_labels, laplace = 1)
+sms_test_pred2 <- predict(sms_classifier2, sms_test)
+CrossTable(sms_test_pred2, sms_test_labels,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c("predicted", "actual"))
+```
+
+The laplace estimator made the model less accurate with the data I had... (not the case for the book example).
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -2,7 +2,7 @@
 title: "Data Import with readr"
 author: "Emma Grossman"
 date: "4/11/2021"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
