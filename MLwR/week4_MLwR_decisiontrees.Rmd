@@ -1,0 +1,406 @@
+---
+title: "Divide and Conquer - Classification Using Decision Trees and Rules"
+author: "Emma Grossman"
+date: "4/19/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+Decision Trees and rule learners make complex decisions form sets of simple choices. The result is logical structures that require little statistical knowledge, which is very useful for business strategy and process improvement.
+
+# Understanding decision trees
+
+Called "decision trees" because of their **tree structure**, these classifiers uses a structure of branches that channel examples into a final predicted class value. 
+
+Decision trees begin with a **root node**, then moves to **decision nodes**, both of which ask a binary question. With the question answered, data are filtered by **branches** which indicate potential outcomes of a decision. **Leaf nodes**, or **terminal nodes** as they are also called, denote the action to be taken as a result of the question answers.
+
+The format of a decision tree is especially helpful for humans, since it is very intuitive to understand. This means it is quite easy to identify why a model works well or doesn't. Additionally, if a model needs to be transparent for legal reasons, like credit scoring models, marketing studies, and diagnosis of medical conditions. 
+
+> Decision trees are the single most widely used machine learning technique, and can be applied for modeling almost any type of data - often with excellent out-of-the-box performance.
+
+That being said, in cases where our data has many nominal features with many levels or a large number of numeric data, decision trees might generate a very complex tree and they already have a tendency to overfit the data.
+
+## Divide and conquer 
+
+**Divide and conquer**, also known as **recursive partitioning**, is the method underlying decision trees because they split the data into subsets, split those subsets into smaller subsets and so on until the algorithm decides the subgroups are sufficiently homogeneous or another stopping criterion is reached.
+
+Ideally, the root node is a feature that is most predictive of the target class, and a branch is created based on this node. The algorithm continues to chose features for decision nodes until the stopping criterion is reached. Some examples of stopping criterion are:
+
+1. most examples at the node have the same class
+2. all features have been used
+3. tree has grown to predetermined size limit
+
+A drawback of decision trees is that it only considers one feature at a time and thus can only make **axis-parallel splits** and not diagonal splits.
+
+# The C5.0 decision tree algorithm
+
+The C5.0 decision tree algorithm is generally the industry standard for computing decision trees.
+
+Strengths:
+
+- does well on many types of problems
+- handles numeric, nominal and missing data well
+- excludes unimportant features
+- small and large data sets
+- model and be interpreted by folks with non-mathematical background (small trees)
+- more efficient than complex models
+
+Weaknesses
+
+- biases toward models that split of features that have a large number of levels
+- easy to overfit or underfit
+- some relationships are difficult to model because of axis-parallel split restraint
+- sensitive to small changes in training data
+- large trees can be difficult to interpret and may be counterintuitive
+
+## Chosing the best split
+
+The first challenge of a decision tree is deciding where to split a feature. Subsets that result in a single class are **pure** and subsets are measured by their **purity**. C5.0 uses **entropy** to measure purity. High entropy means data are diverse and provide little information about other features. Entropy is typically measured in **bits**; with two classes the range of possible values is 0 to 1 and with all other classes the range is 0 to $\log_2(n)$. For all cases, lower values are better and 0 indicates homogeneity while the maximum indicates the most diverse possible.
+
+$$ \text{Engropy}(S) = \sum_{i=1}^{c} - p_i\log_2(p_i)$$
+S = a given segment of our data
+$c$ = number of class levels
+$p_i$ = proportion of values falling into class level i
+
+For example, with two classes red (60\%) and white (40\%):
+```{r}
+-.60*log2(0.6) - 0.4*log2(0.4)
+```
+
+And we can visualize this as well:
+```{r}
+curve(-x *log2(x)-(1-x)*log2(1-x),
+      col = "red", xlab = "x", ylab = "Entropy", lwd = 4)
+```
+
+In order to use entropy to find the best feature to split on, the algorithm calculates **information gain** which is the change in homogeneity that results from a split on each possible feature. To calculate the information gain for feature $F$, we find the distance between the entropy of the segment before the split ($S_1$) and the partitions resulting from the split ($S_2$): $ \text{InfoGain}(F) = \text{Entropy}(S_1) - \text{Entropy}(S_2)$. 
+
+This can be complicated, though, if after the split, the data is divided into more than one partition. We would then need to consider the total entropy across all partitions. To do this, each partition's entropy is weighted according to the proportion of all records falling into that partition. The formula is then $ \text{Entropy}(S) = \sum_{i=1}^{n}w_i\text{Entropy}(P_i)$.
+
+The higher the information gain, the better a feature is a creating homogeneous groups
+
+## Pruning the decision tree
+
+In order to avoid overfitting the training data, we **prune** the decision tree. One way to prune is to tell the tree to stop growing once a certain number of decisions have been made, called **early stopping** or **pre-pruning**. The result is that the tree doesn't perform needless tasks but it could also miss subtle but important patterns by stopping early. The other way to prune is **post-pruning**, which allows a large tree to grow, then prunes leaf nodes to reduce the size of the tree. This is generally more effective than pre-pruning.
+
+The C5.0 algorithm does most of the work for us and will prune leaves or branches with fairly reasonable defaults. The process of removing entire branches and replacing them with smaller decisions is known as **subtree raising** and **subtree replacement**.
+
+# Example - identifying risky bank loans using C5.0 decision trees
+
+```{r}
+credit <- read.csv("https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/credit.csv", header = TRUE)
+```
+
+## Step 2 - exploring and preparing the data
+
+```{r}
+str(credit)
+```
+
+```{r}
+credit <- credit %>%
+  mutate(
+    default = as.factor(ifelse(default==1,"no","yes")),
+    existing_credits = as.factor(existing_credits),
+    dependents = as.factor(dependents)
+  )
+```
+
+
+There are some variables that seem likely to predict a default and we can check those out with `table()`.
+```{r}
+table(credit$checking_balance)
+table(credit$savings_balance)
+```
+
+DM stands for Deutsche Mark, which was the currency used in Germany (where this data originated from) before they adopted the Euro.
+
+```{r}
+summary(credit$months_loan_duration)
+summary(credit$amount)
+```
+
+We can also look at whether folks defaulted on their loans:
+```{r}
+table(credit$default)
+```
+
+
+### Data preperation - creating random training and test datasets
+
+```{r}
+# we want 90% of the data in the training set and 10% in the testing set
+set.seed(843)
+train_sample <- sample(nrow(credit), nrow(credit)*0.9)
+```
+
+```{r}
+credit_train <- credit[train_sample,]
+credit_test  <- credit[-train_sample,]
+```
+
+
+There should still be about 30\% of folks defaulting on the loan for each data set, so let's make sure that is the case:
+```{r}
+prop.table(table(credit_train$default))
+prop.table(table(credit_test$default))
+```
+
+That is satisfactory.
+
+## Step 3 - training a model on the data
+```{r}
+# install.packages("C50")
+library(C50)
+```
+
+Creating the C5.0 model
+```{r}
+credit_model <- C5.0(credit_train[-17], credit_train$default)
+credit_model
+```
+
+To see the tree's decisions we can use `summary()`
+```{r}
+summary(credit_model)
+```
+
+Interpreting the first few lines in plain language:
+
+1. If the checking account balance is unknown or greater than 200 DM, then classify as "not likely to default"
+2. Otherwise, if the checking account balance is less than zero DM or between one and 200 DM...
+3. ... and the credit history is perfect or very good, the classify as "likely to default"
+
+The numbers in the parentheses indicate the number of correct and incorrect examples in that decision. So for (411/54), it means that 411 were correctly classified by the decision and 54 defaulted when it predicted they would not. 
+
+A confusion matrix is also produced. The model correctly classified all by 114 cases, which is an error rater of 12.7\%. 23 cases were classified as default when they did not default while 91 folks who were predicted not to default did.
+
+Decision trees have a tendency to overfit the data, so the error rate produced by this confusion matrix might be optimistic.
+
+## Step 4 - evaluating model performance
+
+```{r}
+credit_pred <- predict(credit_model, credit_test)
+```
+
+```{r}
+library(gmodels)
+CrossTable(credit_test$default, credit_pred,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+             dnn = c("actual default", "predicted default"))
+```
+
+The model correctly classified 66 cases as not defaulting and 14 as defaulting. It incorrectly predicted that 6 people would default who didn't and 14 people as not defaulting but did. Let's see if we can improve this.
+
+## Step 5 - improving model performance
+
+### Boosting the accuracy of decision trees
+
+We can boost performance by combining several models. By using the `trials` argument of the `C5.0()` function, we can ask the function to create several trees and use the boosted team. It is an upper limit, so if the algorithm determines that it has enough trees before reaching the `trials` number, it will stop. 10 is fairly standard to start with.
+```{r}
+credit_boost10 <- C5.0(credit_train[-17], credit_train$default,
+                       trials = 10)
+credit_boost10
+```
+
+Our tree size shrunk from 64 to 50.5, which is a large decrease. Let's take a look at the confusion matrix.
+```{r}
+# summary(credit_boost10)
+
+# (a)   (b)    <-classified as
+# ----  ----
+#  628          (a): class 1
+#   19   253    (b): class 2
+```
+
+Only 19 mistakes were made, which is an improvement.
+
+```{r}
+credit_boost_pred10 <- predict(credit_boost10, credit_test)
+
+CrossTable(credit_test$default, credit_boost_pred10,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+             dnn = c("actual default", "predicted default"))
+```
+
+While this is an improvement, we are still not doing super well at predicting defaults, with only 16/28 = 57\% predicted correctly.
+
+Why do we automatically apply boosting, if it is so helpful? A couple reasons, (1) they can take a lot of time and (2) if our data is noisy sometimes it won't improve our results at all.
+
+
+### Making some mistakes cost more than others
+
+We could mitigate the false negatives by rejecting more people who are on the cusp of default/non-default. The C5.0 algorithm allows us to weigh the errors differently, so that a tree will not make costly mistakes. A **cost matrix** specifies how much more costly each error is relative to any other.
+
+```{r}
+matrix_dimensions <- list(c("no", "yes"), c("no", "yes"))
+names(matrix_dimensions) <- c("predicted", "actual")
+matrix_dimensions
+```
+
+We can now fill in the costs, though the ordering is specific and we should be careful.
+```{r}
+error_cost <- matrix(c(0,1,4,0), nrow = 2,
+                     dimnames = matrix_dimensions)
+error_cost
+```
+
+There is no cost associated with correct interpretations, but false negatives cost 4 times more than false positives. Let's apply this to our decision tree.
+```{r}
+credit_cost <- C5.0(credit_train[-17], credit_train$default,
+                    costs = error_cost)
+credit_cost_pred <- predict(credit_cost, credit_test)
+CrossTable(credit_test$default, credit_cost_pred,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+             dnn = c("actual default", "predicted default"))
+```
+
+There are more overall mistakes for this tree, but there are less folks given loans who default on them. Now, 21/28 = 75\% of actual defaults were correctly classified.
+
+## Understanding classification rules
+
+There are two components of classification: the **antecedent** and the **consequent**, which forms the statement "if this happens, then that happens".
+
+Rule learners are similar to decision trees and can be used for applications that generate knowledge for future action. The are more simple, direct and more easily understood than decision trees. Rule learners excel at identifying rare events and are often used when features are primarily nominal.
+
+### Separate and conquer
+
+Rule learners create many rules that classify data. The rules seem to cover portions of the data and because of that, are often called **covering algorithms** and the rules called covering rules.
+
+### The 1R algorithm
+
+**ZeroR** is the simplest classifier that considers no features and learns no rules. It always predicts the most common class (similar to k-NN with k equal to n?).
+
+In contrast, the **1R algorithm** (or **One Rule** or **OneR**) selects a single rule and performs better than you might expect.
+
+Strengths:
+
+- single, easy to understand rule
+- performs surprising well
+- benchmark to compare more complex algorithms
+
+Weaknesses:
+
+- only one feature
+- overly simple
+
+### The RIPPER algorithm
+
+Early rule learning algorithms were slow (and thus ineffective with large datasets) and generally inaccurate with noisy data.
+
+To solve these issues, the **incremental reduced error pruning (IREP) algorithm** was created and used pre-pruning and post-pruning with complex rules and before separating the instances from the full dataset. Though this helped, decision trees still performed better.
+
+The next step was the **repeated incremental pruning to produce error reduction (RIPPER) algorithm** which improved IREP to generate rules that match/exceed the performance of decision trees.
+
+Strengths:
+
+- easy to understand with human readable rules
+- efficient on large and noisy datasets
+- generally, smpler model than a comparable decision tree
+
+Weaknesses:
+
+- rules may seem to defy common sense
+- not ideal for numeric data
+- may not perform as well as some complex models
+
+Generally, RIPPER is a three step process:
+
+1. Grow
+2. Prune
+3. Optimize
+
+To grow, the separate and conquer technique adds conditions to a rule until it perfectly classifies as subset/runes out of attributes for splitting. Information gain is used to identify each splitting attribute. A rule is immediately pruned when increasing its specificity no longer reduces entropy. 
+
+### Rules from decision trees
+
+By following each branch down to the decision node, a rule can be created from a decision tree. If we use decision trees to generate rules, the resulting rules tend to be more complex than would be found by a rule learner but it can be computationally efficient to generate rules from trees.
+
+### What makes trees and rules greedy?
+
+Both decision trees ad rule learners are **greedy learners**. This is because data is used on a first come first service basis. The downside of greedy learners is that they are not guaranteed to produce the best (optimal, most accurate, or smallest number of rules) model.
+
+Rule learners can re-conquer data but decision trees can only further subdivide. The computational cost of rule learners is somewhat higher than decision trees.
+
+# Example - identifying poisonous mushrooms with rule learners
+
+## Step 1 - collecting data
+
+```{r}
+mushrooms <- read.csv("https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/mushrooms.csv", header = TRUE, stringsAsFactors = TRUE)
+```
+
+## Step 2 - exploring and preparing the data
+
+```{r}
+str(mushrooms)
+```
+
+We're going to drop `mushrooms$veil_type` since it is a factor with only one level.
+```{r}
+mushrooms$veil_type <- NULL
+```
+
+And let's look at the distribution of mushroom type, our response.
+```{r}
+table(mushrooms$type)
+```
+
+52\% are edible, 48\% are poisonous.
+
+An important assumption that we are going to make is that our set of mushrooms is exhaustive. We are not trying to classify unknown mushrooms but trying to discover rules that will inform our complete set of mushrooms. Thus, we do not need to create a training and testing set.
+
+## Step 3 - training a model on the data
+
+If we used a ZeroR model, which classifies based only on most likely group, we would find that all mushrooms are edible. Not what we need, but we would be correct 52\% of the time. This will be our benchmark for comparison.
+
+We'll first implement a 1R algorithm.
+
+```{r}
+# install.packages("OneR")
+library(OneR)
+```
+
+```{r}
+(mushroom_1R <- OneR(type~., data = mushrooms))
+```
+
+The algorithm found that `odor` was the optimal feature to split on. If a mushroom smells unappetizing, don't eat it, is essentially the rule we found.
+
+## Step 4 - evaluating model performance
+
+Nearly 99\% of cases were classified correctly, but that 1\% leads to someone being poisoned, so we need to do better. Let's create a confusion matrix and see what is being misclassified.
+```{r}
+mushroom_1R_pred <- predict(mushroom_1R, mushrooms)
+table(actual = mushrooms$type, predicted = mushroom_1R_pred)
+```
+
+So, 120 mushrooms that were poisonous were classified as edible, certainly not ideal.
+
+Not bad for only using one rule, but we can improve this by adding more, so let's do that.
+
+## Step 5 - improving model performance
+```{r}
+# install.packages("RWeka")
+library(RWeka)
+```
+
+```{r}
+(mushroom_JRip <- JRip(type~., data = mushrooms))
+```
+
+A total of 9 rules were found and these can be read as ifelse statements. The last rule being that if none of the other rules apply, the mushroom is edible.
+```{r}
+mushroom_JRip_pred <- predict(mushroom_JRip, mushrooms)
+table(actual = mushrooms$type, predicted = mushroom_JRip_pred)
+```
+
+All of the mushrooms were correctly classified.
+
+
+
+
