@@ -1,0 +1,252 @@
+---
+title: "Tidy Data with tidyr"
+author: "Emma Grossman"
+date: "4/21/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Tidy Data
+
+```{r}
+table1
+```
+
+```{r}
+table2
+```
+
+
+Three rules make a dataset tidy:
+
+1. each variable is a column
+2. each observation has a row
+3. each value has a cell
+
+table1 is tidy, table2 is not. We can work with tidy data easily:
+```{r}
+# rate per 10,000
+table1 %>%
+  mutate(rate = cases/population*10000)
+```
+
+```{r}
+# Cases per year
+table1 %>%
+  count(year, wt = cases)
+```
+
+```{r}
+# Visualize changes over time
+ggplot(table1, aes(year, cases))+
+  geom_line(aes(group = country), color = "gray50")+
+  geom_point(aes(color = country))
+```
+
+
+## Spreading and Gathering
+
+There are usually two main problems: (1) one variable might be spread across multiple columns, or (2) one observations in multiple rows and bonus (3) both. Luckily, we have two functions in the `tidyverse` package, `gather()` and `spread()`.
+
+### Gathering
+
+`gather()` is helpful when column names are not the names of variables, but the values of other variables. For example, in `table4a`, the column names are the values of the `year` variable.
+
+```{r}
+table4a
+```
+
+```{r}
+table4a <- table4a %>%
+  gather(`1999`, `2000`, key = "year", value = "cases")
+
+table4b <- table4b %>%
+  gather(`1999`, `2000`, key = "year", value = "population")
+```
+
+We can combine these two datasets into one to create our tidy data:
+```{r}
+left_join(table4a, table4b)
+```
+
+### Spreading
+
+Spreading is the opposite of gathering. An observation is scattered across multiple rows, like `table2`.
+```{r}
+table2
+```
+
+
+```{r}
+spread(table2, key = type, value = count)
+```
+
+## Separating and Pull
+
+`table3` has yet another problem. Two variables are in one column of data.
+```{r}
+table3
+```
+
+```{r}
+table3 %>%
+  separate(rate, into = c("cases", "population"))
+```
+
+By default, it separates where it doesn't see an alphanumeric character, like the forward slash above. We can also specify if need be:
+```{r}
+table3 %>%
+  separate(rate, into = c("cases", "population"), sep = "/")
+```
+
+If we look at variables `cases` and `population`, though, they are character vectors instead of numeric vectors, so we should change that. 
+```{r}
+table3 %>%
+  separate(rate, 
+           into = c("cases", "population"), 
+           convert = TRUE)
+```
+
+`convert` attempts to change the variable type into more fitting ones, if there are any. 
+
+If we pass an integer into `sep`, it is interpreted as a position. For example,
+```{r}
+table3 %>%
+  separate(year, into = c("century", "year"), sep = 2)
+```
+
+### Unite
+
+Unite is the opposite of `separate`: it joins two columns.
+
+```{r}
+table5 %>%
+  unite(new, century, year)
+```
+
+If we want to remove the underscore, we can.
+```{r}
+table5 %>%
+  unite(new, century, year, sep = "")
+```
+
+## Missing Values
+
+We have have explicitly missing data, flagged with `NA` or implicitly missing data, which just isn't present.
+
+```{r}
+stocks <- tibble(
+  year   = c(2015, 2015, 2015, 2015, 2016, 2016, 2016),
+  qtr    = c(   1,    2,    3,    4,    2,    3,    4),
+  return = c(1.88, 0.59, 0.35,   NA, 0.92, 0.17, 2.66)
+)
+```
+
+
+We can make the implicit missing values explicit:
+```{r}
+stocks %>%
+  spread(year, return)
+```
+
+Or, if our missing data isn't important, we can make it implicit:
+```{r}
+stocks %>%
+  spread(year, return) %>%
+  gather(year, return, `2015`:`2016`, na.rm = TRUE)
+```
+
+We can also use `complete()`, which finds all unique combinations of variables:
+```{r}
+stocks %>%
+  complete(year, qtr)
+```
+
+Another tool for missing variables is utilized when missing values indicate that the previous value should be carried forward:
+```{r}
+treatment <- tribble(
+  ~person,           ~treatment, ~response,
+  "Derrick Whitmore", 1,         7,
+  NA,                 2,         10,
+  NA,                 3,         9,
+  "Katherine Burke",  1,         4
+)
+```
+
+
+This can be solved with `fill()`.
+```{r}
+treatment %>%
+  fill(person)
+```
+
+# Case Study
+```{r}
+tidyr::who
+```
+
+
+Who is messy.
+
+```{r}
+who1 <- who %>%
+  gather(
+    new_sp_m014:newrel_f65, key = "key",
+    value = cases,
+    na.rm = TRUE
+  )
+who1
+```
+
+```{r}
+who1 %>%
+  count(key)
+```
+
+
+```{r}
+who2 <- who1 %>%
+  mutate(key = stringr::str_replace(key, "newrel", "new_rel"))
+```
+
+```{r}
+who3 <- who2 %>%
+  separate(key, c("new", "type", "sexage"), sep = "_")
+who3
+```
+
+```{r}
+who3 %>%
+  count(new)
+
+who4 <- who3 %>%
+  select(-new, -iso2, -iso3)
+```
+
+
+```{r}
+who5 <- who4 %>%
+  separate(sexage, c("sex", "age"), sep = 1)
+who5
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

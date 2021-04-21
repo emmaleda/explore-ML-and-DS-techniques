@@ -18,11 +18,11 @@ I’ll find an external data set and implement the methods I’ve learned.
     (Chapter 8 r4ds) & Probabilistic Learning - Classification Using
     Naive Bayes (Chapter 4 MLwR)
 4.  Tidy Data with tidyr (Chapter 9 r4ds), Divide and Conquer -
-    Classification Using Decision Trees and Rules (Chapter 5 MLwR), &
-    Understanding regression trees and model trees (pps. 200-216)
-    (Chapter 6 MLwR)
-5.  Relational Data with dplyr (Chapter 10 r4ds) & Black Box Methods -
-    Neural Networks and Support Vector Machines (Chapter 7 MLwR)
+    Classification Using Decision Trees and Rules (Chapter 5 MLwR)
+5.  Relational Data with dplyr (Chapter 10 r4ds), Understanding
+    regression trees and model trees (pps. 200-216) (Chapter 6 MLwR)
+    \&Black Box Methods - Neural Networks and Support Vector Machines
+    (Chapter 7 MLwR)
 6.  Strings with stringr (Chapter 11 r4ds) & Finding Patterns - Market
     Basket Analysis Using Association Rules (Chapter 8 MLwR)
 7.  factors with forcats (Chapter 12 r4ds) & Evaluating Model
