@@ -1,0 +1,204 @@
+---
+title: "Relational Data with dplyr"
+author: "Emma Grossman"
+date: "4/26/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In the real world, it is rare that data analysis only involves a single table of data. Multiple tables are called relational data, because the relationships between tables are as important as the individual datasets.
+
+There are several ways to join data from multiple tables: 
+
+- *mutating joins* - add new variables to a df from matching observations in another
+- *filtering joins* - filter observations from one df based on whether they match an observation in the other table
+- *set operations* - treat observations as if they were set elements
+
+```{r}
+library(tidyverse)
+library(nycflights13)
+```
+
+## nycflights13
+
+There are four tibbles related to flights.
+```{r}
+head(airlines)
+head(airports)
+head(planes)
+head(weather)
+```
+
+`flights` and `planes` have the variables `tailnum` in common; `flights` and `airlines` have `carrier` in common; `flights` and `airports` have `origin` and `dest` in common; and `flights` and `weather` have `origin` in common.
+
+### Keys
+
+*Keys* are variables used to connect pairs of tables. A *primary key* uniquely identifies  an observation in a table, like an ID column. A *foreign key* uniquely identifies an observation in another table.
+
+One way to ensure that a primary key indeed uniquely identifies each observation is by using `count()`.
+```{r}
+planes %>%
+  count(tailnum) %>%
+  filter(n > 1)
+```
+
+Since there are no `tailnum` assigned to multiple planes, it is indeed unique.
+```{r}
+weather %>%
+  count(year, month, day, hour, origin) %>%
+  filter(n > 1)
+```
+
+Sometimes there is no primary key. No combination of the variables uniquely identifies each observation. 
+```{r eval = FALSE}
+flights %>%
+  count(year, month, day, flight) %>%
+  filter(n > 1)
+```
+
+What if we include `tailnum`?
+```{r}
+flights %>%
+  count(year, month, day, tailnum) %>%
+  filter(n > 1)
+```
+
+If a dataset lacks primary keys, we can create a *surrogate key* by adding an ID column. A primary key and a foreign key form a *relation*. Relations are typically one-to-many.
+
+### Mutating Joins
+
+Let's create a smaller dataset.
+```{r}
+flights2 <- flights %>%
+  select(year:day, hour, origin, dest, tailnum, carrier)
+head(flights2)
+```
+
+
+If we want to add the airline names to `flights2`. We can do this with `left_join()`.
+```{r}
+flights2 %>%
+  select(-origin, -dest)%>%
+  left_join(airlines, by = "carrier")
+```
+
+We could accomplish the same thing using `mutate`.
+```{r}
+flights2 %>%
+  select(-origin, -dest) %>%
+  mutate(name = airlines$name[match(carrier, airlines$carrier)])
+```
+
+#### Inner Join
+
+For an inner join, unmatched rows are not included in the result.
+
+#### Outer Join
+
+Keeps observations that appear in at least one of the tables. **Left join** keeps all observations in x, **right join** keeps all observations in y, and a **full join** keeps all observations in x and y. 
+
+Left join is the most common and should be the default.
+
+### Duplicate Keys
+
+What happens if we our key isn't unique?
+```{r}
+x <- tribble(
+  ~key, ~val_x,
+     1,   "x1",
+     2,   "x2",
+     2,   "x3",
+     1,   "x4"
+)
+
+y <- tribble(
+  ~key, ~val_x,
+     1,   "y1",
+     2,   "y2",
+)
+
+left_join(x, y, by = "key")
+```
+
+With a duplicate key, all possible combinations are returned.
+
+### Defining the Key Columns
+
+- if we use `by = NULL`, all variables that appear in both tables are used to join the tables, also called a *natural* join
+
+```{r}
+flights2 %>%
+  left_join(weather)
+```
+
+
+- join by a named character vector: `by = c("a"  = "b")`: variable `a` in table x matches to variable `b` in table y. The variables from x will be used in the output.
+
+```{r}
+flights2 %>%
+  left_join(airports, c("dest" = "faa"))
+```
+
+```{r}
+flights2 %>%
+  left_join(airports, c("origin" = "faa"))
+```
+
+### Filtering Joins
+
+Rather than affect variables, filtering joins affect the observations themselves.
+
+- **semi_join(x, y)** *keeps* all observations in x that have a match in y
+- **anti_join(x, y)** *drops* all observations in x that have a match in y
+
+```{r}
+top_dest <- flights %>%
+  count(dest, sort = TRUE) %>%
+  head(10)
+top_dest
+```
+
+We could filter this by hand:
+```{r}
+flights %>%
+  filter(dest %in% top_dest$dest)
+```
+
+but once we add more variables it is much more difficult to filter by hand. We can use semi_join instead.
+```{r}
+flights %>%
+  semi_join(top_dest)
+```
+
+
+Using anti-joins, we can easily find join mismatches.
+```{r}
+flights %>%
+  anti_join(planes, by = "tailnum") %>%
+  count(tailnum, sort = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
