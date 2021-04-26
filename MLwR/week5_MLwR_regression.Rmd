@@ -1,0 +1,231 @@
+---
+title: "Forcasting Numeric Data - Regression Methods"
+author: "Emma Grossman"
+date: "4/26/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Understanding Regression
+
+Regression is "surely to most widely used machine learning method."
+
+Strengths:
+
+- most common approach for modeling numeric data
+- can be adapted to model almost any task
+- returns estimates of size and strength of the relationships
+
+Weaknesses:
+
+- strong assumptions about the data
+- model's form must be specified by user in advance
+- does not handle missing data
+- only works with numeric features, categorical data requires additional prep
+- some knowledge of stats needed to understand the model
+
+# Understanding regression trees and model trees
+
+There are two types of trees used for numeric prediction. The first is **classification and regression tree** algorithm, which make predictions based on the average value of examples that reach that leaf. The second is **model trees**, which are less widely known but perhaps more powerful. At each leaf of a model tree, a multiple linear regression model is built from the examples at each node, meaning that there are potentially 10s or 100s of models built for a single tree. They are more difficult to understand, but may be more accurate.
+
+## Adding regression to trees
+
+Strengths:
+
+- combines strengths of decision trees with ability to model numeric data
+- model does not need to be specified in advance
+- features are selected automatically
+- some types of data may fit better than linear regression
+- does not require statistical knowledge to interpret
+
+Weaknesses:
+
+- not as well-known as linear regression
+- large amount of data is required to train the model
+- difficult to assess impact of individual features
+- can be difficult to interpret
+
+One criterion that is commonly used to split data for a tree is **standard deviation reduction (SDR)**:
+
+$$ \textbf{SDR} = sd(T) - \sum_i \frac{|T_i|}{|T|}* sd(T_i)$$
+Here, $T_i$ are sets of values resulting from a split and $|T|$ is number of observations in set T. An example:
+```{r}
+tee <- c(1,1,1,2,2,3,4,5,5,6,6,7,7,7,7)
+at1 <- c(1,1,1,2,2,3,4,5,5)
+at2 <- c(6,6,7,7,7,7)
+bt1 <- c(1,1,1,2,2,3,4)
+bt2 <- c(5,5,6,6,7,7,7,7)
+sdr_a <- sd(tee)- (length(at1)/length(tee)*sd(at1) + length(at2)/length(tee)*sd(at2))
+sdr_b <- sd(tee)- (length(bt1)/length(tee)*sd(bt1) + length(bt2)/length(tee)*sd(bt2))
+```
+
+So, the SDR of A is `r round(sdr_a,4)` and the SDR of B is `r round(sdr_b,4)`.
+
+> Since the standard deviation was reduced more for the split on B, the decision tree would use B first. It results in slightly more homogeneous sets than does A. 
+
+A regression tree, if we decided to use only one split, would be done here. It would take the average of each mode as the predicted value for the response. The prediction for 1, 2, 3, or 4 would be *mean(bt1) = 2* and *mean(bt2) = 6.25* for values of 5, 6, or 7. A model tree would go further and fit a linear regression line for each group.
+
+# Example - estimating the quality of wines with regression trees and model trees
+
+## Step 2 - exploring and preparing the data
+```{r}
+wine <- read.csv("https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/whitewines.csv", header = TRUE)
+```
+
+
+```{r}
+str(wine)
+```
+
+Another advantage of trees is that we do not need to standardize or normalize the data.
+
+```{r}
+ggplot(wine)+
+  geom_histogram(aes(x = quality), binwidth = 1)
+```
+
+Let's split the data into a training and testing set.
+```{r}
+set.seed(158)
+train_sample <- sample(nrow(wine), nrow(wine)*0.75)
+
+wine_train <- wine[ train_sample, ]
+wine_test  <- wine[-train_sample, ]
+```
+
+## Step 3 - training a model on the data
+```{r}
+library(rpart)
+```
+
+```{r}
+m_rpart <- rpart(quality~., data = wine_train)
+m_rpart
+```
+
+The variable `alcohol` is the single most important feature in the data because it was used first. The \* symbol denotes a node that results in a prediction.
+
+```{r}
+summary(m_rpart)
+```
+
+### Visualizing decision trees
+```{r}
+library(rpart.plot)
+rpart.plot(m_rpart, digits = 3)
+```
+
+```{r}
+rpart.plot(m_rpart, digits = 4, fallen.leaves = TRUE, type = 3, extra = 101)
+```
+
+`fallen.leaves` forces alignment at the bottom; `type` and `extra` determine the way the decisions and nodes are labeled.
+
+## Step 4 - evaluating model performance
+```{r}
+p_rpart <- predict(m_rpart, wine_test)
+```
+
+
+```{r}
+summary(p_rpart)
+summary(wine_test$quality)
+```
+
+The predicted range is much narrower than the actual values, which could pose a problem.
+
+```{r}
+cor(p_rpart, wine_test$quality)
+```
+
+That's not bad.
+
+### Measuring performance with mean absolute error
+
+We can measure how far the prediction was from the true value with **mean absolute error (MAE)**:
+
+$$ \textbf{MAE} = \frac{1}{n} \sum_{i=1}^{n} |e_i| $$
+
+We can create this function easily:
+```{r}
+MAE <- function(actual, predicted){
+  mean(abs(actual-predicted))
+}
+```
+
+
+```{r}
+MAE(p_rpart, wine_test$quality)
+```
+
+On average, the difference between our model's predictions and the true quality score is about 0.59.
+
+The average score of wine of our training data is:
+```{r}
+mean(wine_train$quality)
+```
+
+We can look at the MAE if we predicted every single value to be the mean of our training dataset.
+```{r}
+MAE(mean(wine_train$quality), wine_test$quality)
+```
+
+So, our model is better, but not by much. 
+
+## Step 5 - improving model performance
+
+Let's try implementing a model tree algorithm, more specifically the **Cubist** algorithm.
+```{r}
+library(Cubist)
+```
+
+```{r}
+m_cubist <- cubist(x = wine_train[-12], y = wine_train$quality)
+m_cubist
+```
+
+Eight rules were generated to model wine quality.
+```{r}
+summary(m_cubist)
+```
+
+
+Let's take a look at how this predicts on new data.
+```{r}
+p_cubist <- predict(m_cubist, wine_test)
+summary(p_cubist)
+```
+
+Already we can see that a wider range of values is being predicted. We can also look at the correlation:
+```{r}
+cor(p_cubist, wine_test$quality)
+```
+
+That's a bit higher, which is a good sign. Let's check the MAE as well.
+```{r}
+MAE(wine_test$quality, p_cubist)
+```
+
+Again, a slightly better MAE as well.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
