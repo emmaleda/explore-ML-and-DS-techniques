@@ -1,0 +1,310 @@
+---
+title: "Black Box Methods - Neural Networks and Support Vector Machines"
+author: "Emma Grossman"
+date: "4/27/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+**Black box** methods are called such because the model created to obtain results is obscure and difficult to understand because of complex mathematics.
+
+# Understanding neural networks
+
+A relationship between a set of input signals and an output signal can be modeled with an **artificial neural network (ANN)**, which is derived from mimicing how biological brains respond to stimuli from sensory inputs.
+
+## From biological to artificial neurons
+
+There are several important characteristics of ANN:
+
+- **activation funtion** - transforms a neuron's net input signal into a single output signal to be broadcasted further in the network
+- **netowrk topology** - describes the number of neurons in the model, as well as the number of layers and manner in which they are connected
+- **training algorithm**, specifies how connection weights are set in order to inhibit or excite neurons in proportion to the input signal
+
+### Activation functions
+
+A certain activation threshold must be obtained before the activation function will fire its signal, and thus, it is called a **threshold activation function**. Though this has parellels in biology, it is rarely used in the real world.
+
+A more commonly used activation function is called the **sigmoid activation function**, which is logistic and differentiable. Other activations functions are linear, saturatedlinear, hyperbolic tangent, and gaussian. The differences between these functions are their support.
+
+### Network topology
+
+> The capacity of a neural network to learnis rooted in its **topolocy**, or the patters and structures of inteconnected neurons.
+
+Key features are:
+ - number of layers
+ - whether information in the network is allowed to travel backward
+ - number of nodes within each layer of the network
+ 
+ More complex networks can identify more subtle patterns.
+ 
+**Multilayer networks** add hidden layers to the structure of ANN and are generally **fully connected**, meaning that each node is connected to the node in the next layer. A network with more than one hidden layer is called a **deep neural network (DNN)** and training shuch models is called **deep learning**.
+
+If input signals are only allowed one direction, then they are called **feedforward networks**. In contrast, if a signal can moves forward and backward, it is called a **recurrent network** (or **feedback network**). A **delay** can also be added to the structure, which is short term memory that increases the power of recurrent networks a lot. The inclusion of a delay allows the model to surmise events over time. With all of these potential modifications, extremely complex patterns can be learned. 
+
+Despite all of the benefits to recurrent models, multilayer feedforward networks, also known as **multilayer perceptron (MLP)** are the de facto standard.
+
+Nodes can also vary. Input nodes and output nodes are predetermined by the number of explanatory variables and the number of response variables, but the number of hidden nodes can be determined by the user. Some aspects that inform how many hidden nodes are (1) number of input nodes, (2) amount of training data, (3) amount of noisy data, and (4) complexity of the task.
+
+More nodes means more complexity but the risk is overfitting the training data. Common (and best) practice is to use the least amount of nodes that results in an adequate model.
+
+### Training neural networks with backpropagation
+
+**Backpropagation** is the algorithm used to train an ANN model and it uses a strategy of back-propagating errors.
+
+Strengths:
+
+- can be used for classification or numeric prediction
+- models complex patterns
+- few assumptions about underlying relationships
+
+Weaknesses:
+
+- slow to train and computationally intensive
+- prone to overfitting
+- can be nearly impossible to interpret
+
+The backpropagation algorithm is an iterative process. Random weights are chosen for each explanatory variable, a model is estimated, then the weights are recalculated using **gradient descent** until a stopping criteron is reached.
+
+# Example - modeling the strength of concrete with ANNs
+
+```{r}
+concrete <- read.csv("https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/concrete.csv", header = TRUE)
+str(concrete)
+```
+
+## Step 2 - exploring and preparing the data
+
+Generally, we want our data to be scaled down to a narrow range. If the data look normal, then we standardize to a N(0,1). If they look uniform or severely non-normal then min-max normalization is preferred. 
+
+```{r}
+normalize <- function(x){
+  return((x - min(x)) / (max(x) - min(x)))
+}
+```
+
+```{r}
+concrete_norm <- as.data.frame(lapply(concrete, normalize))
+summary(concrete_norm$strength)
+summary(concrete$strength)
+```
+
+```{r}
+samp <- sample(1:nrow(concrete_norm), nrow(concrete_norm)*0.75)
+concrete_train <- concrete_norm[ samp, ]
+concrete_test  <- concrete_norm[-samp, ]
+```
+
+## Step 3 - training a model on the data
+
+```{r}
+library(neuralnet)
+```
+
+```{r}
+concrete_model <- neuralnet(strength ~ cement + slag + ash + water + superplastic +
+                              coarseagg + fineagg + age, data = concrete_train)
+plot(concrete_model)
+```
+
+The weights are indicated by the numbers of the explanatory variables and the **bias terms** are included by in blue, labeled 1. Bias terms allows the value at the nodes to be shifted up or down, similar to an intercept in linear regression. The "Error" at the bottom is the Sum of Squared Error, or the difference between the actual and predicted values. Smaller SSEs are better
+
+## Step 4 - evalutating model performance
+
+```{r}
+model_results <- compute(concrete_model, concrete_test[1:8])
+predicted_strength <- model_results$net.result
+cor(predicted_strength, concrete_test$strength)
+```
+
+Results might differ every time the neural net is run because it starts with random weights. For reproducable examples, we can use `set.seed()`. 
+
+This is a fairly strong correlation, which implies the model is doing a good job. Let's see if we can improve the performance.
+
+## Step 5 - improving model performance
+
+We can add `hidden` to the `neuralnet` function to include more than one hidden node.
+
+```{r}
+concrete_model2 <- neuralnet(strength ~ cement + slag + ash + water + superplastic +
+                              coarseagg + fineagg + age, 
+                             hidden = 5, data = concrete_train)
+plot(concrete_model2)
+```
+
+The error has decreased and the steps needed to find optimal weights have increased.
+
+```{r}
+model_results2 <- compute(concrete_model2, concrete_test[1:8])
+predicted_strength2 <- model_results2$net.result
+cor(predicted_strength2, concrete_test$strength)
+```
+
+This is a big improvement, but there is still more we can do. Our choice of activation function will have a big impact on the results. Lately, an activation function called **rectifier** has become popular because it has been successful with image recognition. Rather than use the **rectified linear unit (ReLU)** directly, we use a **softplus** approximation since the derivative of the ReLU is not defined at x = 0. 
+
+```{r}
+softplus <- function(x){log(1 + exp(x))}
+```
+
+So, we'll tell  `neuralnet()` to use softplus, as well as add an aditional 5 layer hidden layer.
+```{r}
+set.seed(12345)
+concrete_model3 <- neuralnet(strength ~ cement + slag + ash + water + superplastic +
+                              coarseagg + fineagg + age, 
+                             hidden = c(5,5), data = concrete_train,
+                             act.fct = softplus)
+# plot(concrete_model3)
+```
+
+```{r}
+# model_results3 <- compute(concrete_model3, concrete_test[1:8])
+```
+
+I'm not quite sure why the above code isn't working, it worked for the author of the book. 
+
+Our predicted values are on the normalized scale:
+```{r}
+strengths <- data.frame(
+  actual = concrete$strength[-samp],
+  pred = predicted_strength2
+)
+head(strengths, n = 3)
+```
+
+It would be useful to get our predicted values back on the original scale.
+
+```{r}
+unnormalize <- function(x){
+  return( (x*(max(concrete$strength)) - 
+             min(concrete$strength)) + min(concrete$strength))
+}
+```
+
+
+```{r}
+strengths$pred_new <- unnormalize(strengths$pred)
+strengths$error <- strengths$pred_new - strengths$actual
+head(strengths, n = 3)
+```
+
+# Understanding support vector machines
+
+A **support vector machine (SVM)** is used for classification and numeric prediction; it creates a flat boundary called a **hyperplane** of homogeneous groups. It is a powerful methods that can model complex relationships.
+
+The math is complex but SVM is most commonly used for binary classification, and is what we'll go over in this chapter.
+
+## Classification with hyperplanes
+
+If two groups can be separated perfectly by a straight line or flat surface, they are said to be **linearly separable**.
+
+If there are multiple lines that can be used to separate, then the algorithm searches for the **maximum margin hyperplane (MMH)**, which creates the greatest separation between the two groups.
+
+**Support vectors** are the points from each class that are the closest to MMH; each class must have at least one and they alone define the MMH.
+
+## The case of nonlinearly separable data
+
+If the data is nonlinearly separable, then a **slack variable** is used. It creates a soft margin that allows some points to fall on the wrong side of the line. A cost value is applied to all points that violate the constraints. The greater the cost parameter, the harder the optimization will try to achieve 100\% separation. 
+
+## Using kernels for nonlinear spaces
+
+We can also use a *kernel trick* to map the problem to a higher dimension space and by doing this, nonlinear relationships may appear linear.
+
+Strengths:
+
+- used for classifiation and for numeric prediction
+- not overly influenced by noisy data
+- may be easier to use than neural nets
+- high accuracy in data mining competitions
+
+Weaknesses:
+
+- best model requires testing of various combinations of kernels and model parameters
+- slow to train when there are many features
+- complex black box model that can be nearly impossible to interpret
+
+# Example - performing OCR with SVMs
+
+We'll be developing a model similar to those used at **optical character recognition (OCR)**, which process paper-based documents by converting printed or handwritten text into electronic form.
+
+## Step 2 - exploring and preparing the data
+
+```{r}
+letters <- read.csv("https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/letterdata.csv", header = TRUE)
+str(letters)
+```
+
+All features must be numeric and scaled to a small interval. The R package we'll use will rescale automatically.
+
+```{r}
+samp_letters <- sample(1:nrow(letters), nrow(letters)*0.75)
+letters_train <- letters[ samp_letters,]
+letters_test  <- letters[-samp_letters,]
+```
+
+## Step 3 - training a model on the data
+
+```{r}
+# install.packages("kernlab")
+library(kernlab)
+letter_classifier <- ksvm(letter~., data = letters_train,
+                          kernel = "vanilladot")
+letter_classifier
+```
+
+
+## Step 4 - evaluating model performance
+```{r}
+letter_predictions <- predict(letter_classifier, letters_test)
+head(letter_predictions)
+```
+
+```{r}
+table(letter_predictions, letters_test$letter)
+```
+
+```{r}
+agreement <- letter_predictions == letters_test$letter
+table(agreement)
+prop.table(table(agreement))
+```
+
+## Step 5 - improving model performance
+
+Our model is over 20 times better than random chance.
+
+```{r}
+letter_classifier_rbf <- ksvm(letter~., data = letters_train,
+                              kernel = "rbfdot")
+```
+
+```{r}
+letter_predictions_rbf <- predict(letter_classifier_rbf, letters_test)
+agreement_rbf <- letter_predictions_rbf == letters_test$letter
+table(agreement_rbf)
+prop.table(table(agreement_rbf))
+```
+
+We can also vary the cost parameter.
+```{r}
+# cost_values <- c(1, seq(5,40, by = 5))
+# 
+# accuracy_values <- sapply(cost_values, function(x) {
+#   set.seed(12345)
+#   m <- ksvm(letter~., data = letters_train,
+#             kernel = "rbfdot", C = x)
+#   pred = predict(m, letters_test)
+#   agree <- ifelse(pred == letters_test$letter, 1, 0)
+#   accuracy <- sum(agree) / nrow(letters_test)
+#   return(accuracy)
+# })
+# plot(cost_values, accuracy_values, type = "b")
+```
+
+
+
+
+
+
+
