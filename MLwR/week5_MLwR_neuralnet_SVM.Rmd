@@ -288,18 +288,18 @@ prop.table(table(agreement_rbf))
 
 We can also vary the cost parameter.
 ```{r}
-# cost_values <- c(1, seq(5,40, by = 5))
-# 
-# accuracy_values <- sapply(cost_values, function(x) {
-#   set.seed(12345)
-#   m <- ksvm(letter~., data = letters_train,
-#             kernel = "rbfdot", C = x)
-#   pred = predict(m, letters_test)
-#   agree <- ifelse(pred == letters_test$letter, 1, 0)
-#   accuracy <- sum(agree) / nrow(letters_test)
-#   return(accuracy)
-# })
-# plot(cost_values, accuracy_values, type = "b")
+cost_values <- c(1, seq(5,40, by = 5))
+
+accuracy_values <- sapply(cost_values, function(x) {
+  set.seed(12345)
+  m <- ksvm(letter~., data = letters_train,
+            kernel = "rbfdot", C = x)
+  pred = predict(m, letters_test)
+  agree <- ifelse(pred == letters_test$letter, 1, 0)
+  accuracy <- sum(agree) / nrow(letters_test)
+  return(accuracy)
+})
+plot(cost_values, accuracy_values, type = "b")
 ```
 
 
