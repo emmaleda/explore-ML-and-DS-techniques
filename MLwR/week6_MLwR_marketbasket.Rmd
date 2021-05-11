@@ -34,3 +34,134 @@ Weaknesses:
 - could draw spurious conclusions from random patterns
 
 ## Measuring rule interest - support and confidence
+
+An *interesting* association rule is determined by support and confidence, and if we apply minimum thresholds to these measures, we can easily limit the number of rules reported. 
+
+The **support** measures how frequently an itemset/rule occurs in the data. A rule's **confidence** measures its predictive power. It is the proportion of transactions where the presence of an item or itemset X results in the presents of an item or itemset Y. 
+
+Rules that have high support and high confidence are **strong rules**
+
+## Building a set of rules with the Apriori principle
+
+Creating rules has two phases:
+
+1. identify all itemsets that meet minimum support threshold
+2. create rules from those itemsets that meet a minimum confidence threshold
+
+# Example - identifying frequently purchased groceries with association rules
+
+```{r}
+# install.packages("arules")
+library(arules)
+```
+
+
+### Data preperation - creating a sparse matrix for transaction data
+
+```{r}
+groceries <- read.transactions("https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/groceries.csv", sep = ",")
+summary(groceries)
+```
+
+We can look at the sparse matrix with `inspect()`.
+```{r}
+inspect(groceries[1:5])
+```
+
+`itemFrequency()` allows us to view the proportion of transactions that contain a specified item.
+```{r}
+itemFrequency(groceries[, 1:3])
+```
+
+#### Visualizing item support - item frequency plots
+
+```{r}
+itemFrequencyPlot(groceries, support = 0.10)
+```
+
+These are items in the groceries with at least 10\% support. We can also ask for a specific number of items:
+```{r}
+itemFrequencyPlot(groceries, topN = 20)
+```
+
+#### Visualizing the transaction data - plotting the sparse matrix
+
+```{r}
+image(groceries[1:5])
+```
+
+
+```{r}
+image(sample(groceries, 100))
+```
+
+## Step 3 - training a model on the data
+
+We need to find a balance of the right threshold values of the support and confidence. Too high and we may not find any interesting rules. Too low and we might get too many rules. The default for the `apriori()` function in the `arules` package is support = 0.1 and confidence = 0.8, but this results in no rules for our `groceries` data.
+
+```{r}
+apriori(groceries)
+```
+
+
+According to the author that is. My data differs a bit, since a rule was returned. Another argument is **minlen**, setting that to 2 will eliminate rules that contain fewer than two items, to prevent uninteresting rules from appearing. 
+
+```{r}
+groceryrules <- apriori(groceries, parameter = list(support = 0.006,
+                                                    confidence = 0.25,
+                                                    minlen = 2))
+groceryrules
+```
+
+
+Our result is now 463 association rules.
+
+## Step 4 - evaluating model performance
+
+```{r}
+summary(groceryrules)
+```
+
+
+There are 150 rules that have 2 items, 297 that have 3 items, and 16 that have 4 items. Rule size is calculated for both sides of the equation, so \{bread\} => \{butter\} has two items and \{peanut butter, jelly\} => \{bread\} has three items.
+
+The **lift** of a rule measures how much more likely one item or itemset is to be purchased relative to its typical rate of purchase, given you know another item has been purchased.
+
+Let's take a look at the first three rules.
+```{r}
+inspect(groceryrules[1:3])
+```
+
+The first rule implies that if a customer buys potted plants, they will also buy whole milk. This doesn't seem like a terribly useful rule, though. We can split association rules into three categories:
+
+1. actionable
+2. trivial
+3. inexplicable
+
+**Actionable** rules are clear and insightful, **trivial** rules are obvious, so clear but not useful, and **inexplicable** if the connection between items is unclear and the information gained cannot be used. 
+
+## Step 5 - improving model performance
+
+### Sorting the set of association rules
+
+```{r}
+inspect(sort(groceryrules, by = "lift")[1:5])
+```
+
+A lift of about 3.96 implies that people who buy herbs are nearly four times more likely to buy root vegetables than the typical customer.
+
+### Taking subsets of association rules
+
+We can filter our rules to only include a particular item of interest.
+
+```{r}
+berryrules <- subset(groceryrules, items %in% "berries")
+inspect(berryrules)
+```
+
+
+
+
+
+
+
