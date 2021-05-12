@@ -1,0 +1,331 @@
+---
+title: "Strings with stringr"
+author: "Emma Grossman"
+date: "5/12/2021"
+output: github_document
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+```
+
+The focus of this chapter is regex (I have experience with this from Computational Linguistics). 
+
+## String Basics
+
+```{r}
+string1 <- "This is a string"
+string2 <- 'To put a "quote" inside a string, use single quotes'
+```
+
+We can use a backslash to "escape" a string:
+```{r}
+double_quote <- "\""
+single_quote <- '\''
+```
+
+So, to include a literal backslash, we need to double it.
+```{r}
+x <- c("\"", "\\")
+x
+writeLines(x)
+```
+
+Sometimes an odd string refers to a non-English character:
+```{r}
+(x <- "\u00b5")
+plot(runif(10), runif(10), xlab ="\u00b5")
+# a way to have Greek letters on our plots without the package
+# I used for my MS project
+```
+
+## String Length
+
+Functions in the `stringr` generally begin with the prefix `str_`.
+
+```{r}
+str_length(c("a", "R for data science", NA))
+```
+
+
+## Combining Strings
+
+```{r}
+str_c("x", "y")
+str_c("x", "y", "z")
+str_c("x", "y", sep = ", ")
+```
+
+Missing values are contagious.
+```{r}
+x <- c("abc", NA)
+str_c("|-", x, "-|")
+str_c("|-", str_replace_na(x), "-|")
+```
+
+As shown above, it is a vectorized function and recycles strings:
+```{r}
+str_c("prefix-", c("a", "b", "c"), "-suffix")
+```
+
+Objects of length 0 are dropped, which is useful with `if`.
+```{r}
+name <- "Emma"
+time_of_day <- "morning"
+birthday <- FALSE
+
+str_c(
+  "Good ", time_of_day, " ", name,
+  if(birthday) "and HAPPY BIRTHDAY",
+  "."
+)
+```
+
+We can collapse a vector of strings into just one with an argument:
+```{r}
+str_c(c("x", "y", "z"), collapse = ", ")
+str_c(c("x", "y", "z"), collapse = "")
+```
+
+## Subsetting strings
+
+```{r}
+# str_sub(vector, start, end)
+x <- c("Apple", "Banana", "Pear")
+str_sub(x, 1, 3)
+
+# negative numbers count backward
+str_sub(x, -3, -1)
+```
+
+If we try to subset with more characters than exist, the funciton will return as many characters as it can:
+```{r}
+str_sub("a", 1, 5)
+```
+
+Freaking cool:
+```{r}
+str_sub(x, 1, 1) <- str_to_lower(str_sub(x, 1, 1))
+x
+```
+
+## Locales
+
+Changing from upper to lower case or vise versa can be complicated because different languages use different rules to do so. The default Locale used by R depends on the current locale provided by the operating system of the computer. 
+
+Sometimes how letters are storted varies by region:
+```{r}
+x <- c("apple", "eggplant", "banana")
+str_sort(x, locale = "en") # english
+str_sort(x, locale = "haw") # hawiian
+```
+
+
+## Matching Patterns with Regular Expressions
+
+### Basic Matches
+
+Exact match:
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "an")
+```
+
+`.` matches any character (except a new line)
+```{r}
+str_view(x, ".a.")
+```
+
+Use a double backslash to escape using `.`'s special function and ask for an exact match.
+```{r}
+dot <- "\\."
+writeLines(dot)
+str_view(c("abc", "a.c", "bef"), "a\\.c")
+```
+
+To identify a literal backslash, we need four of them.
+```{r}
+x <- "a\\b"
+writeLines(x)
+str_view(x, "\\\\")
+```
+
+### Anchors 
+ `^` matches the start of a string 
+ `$` matches the end of a string
+ 
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "^a")
+str_view(x, "a$")
+```
+ 
+We can force regex to only match a complete string by sandwiching it between the anchors:
+```{r}
+x <- c("apple pie", "apple", "apple cake")
+str_view(x, "apple")
+str_view(x, "^apple$")
+```
+
+### Character Classes and Alternatives
+
+- \\d matches any digit
+- \\s matches whitespace (space, tab, newline)
+- [abc] matches a, b or c
+- [^abc] maches anything except a, b or c
+
+```{r}
+str_view(c("gray", "grey"), "gr(e|a)y")
+```
+
+### Repetition
+
+How many times a pattern is matched.
+
+- ?: 0 or 1
+- +: 1 or more
+- *: 0 or more
+
+```{r}
+x <- "1888 is the longest year in Roman numerals: MDCCCLXXXVIII"
+str_view(x, "CC?")
+str_view(x, "CC+")
+str_view(x, "C[LX]+")
+```
+
+We can utilize numbers as well.
+- \{n\}: exactly n times
+- \{n,\}: n or more times
+- \{,m\}: at most m times
+- \{n,m\}: between n and m times
+
+```{r}
+str_view(x, "C{2}")
+str_view(x, "C{2,}")
+str_view(x, "C{2,3}")
+```
+
+By default, the longest match possible will always be returned, but this can be changed by adding a `?` after them.
+```{r}
+str_view(x, "C{2,3}?")
+```
+
+Regex is powerful but complex, and it generally should not be the first method to use when trying to solve a problem. It can be more trouble than it is worth.
+
+### Detect Matches
+
+`str_detect` determines if a character expression matches a pattern.
+```{r}
+x <- c("apple", "banana", "pear")
+str_detect(x, "e")
+```
+
+```{r}
+# How many common words start with t?
+sum(str_detect(words, "^t"))
+
+# What proportion of common words end with a vowel?
+mean(str_detect(words, "[aeiou]+$"))
+```
+
+### Exact Matches
+
+```{r}
+length(sentences)
+head(sentences)
+```
+
+```{r}
+colors <- c(
+  "red", "orange", "yellow", "greeen", "blue", "purple"
+)
+color_match <- str_c(colors, collapse = "|")
+color_match
+```
+
+```{r}
+has_color <- str_subset(sentences, color_match)
+matches <- str_extract(has_color, color_match)
+head(matches)
+```
+
+
+```{r}
+more <- sentences[str_count(sentences, color_match) > 1]
+str_view_all(more, color_match)
+```
+
+
+### Grouped Matches
+
+```{r}
+noun <- "(a|the) ([^ ]+)"
+has_noun <- sentences %>%
+  str_subset(noun) %>%
+  head(10)
+
+has_noun %>%
+  str_extract(noun)
+```
+
+We could also do this with `tibble`:
+```{r}
+tibble(sentence = sentences) %>%
+  tidyr::extract(
+    sentence, c("article", "noun"), "(a|the) ([^ ]+)",
+    remove = FALSE
+  )
+```
+
+
+### Replacing Matches
+
+```{r}
+x <- c("apple", "pear", "banana")
+str_replace(x, "[aeiou]", "-")
+str_replace_all(x, "[aeiou]", "-")
+```
+
+```{r}
+x <- c("1 house", "2 cars", "3 people")
+str_replace_all(x, c("1" = "one", "2" = "two", "3" = "three"))
+```
+
+```{r}
+sentences %>%
+  str_replace("([^ ]+) ([^ ]+) ([^ ]+)", "\\1 \\3 \\2") %>%
+  head(5)
+```
+
+### Splitting 
+
+```{r}
+sentences %>%
+  head(5) %>%
+  str_split(" ")
+```
+
+```{r}
+sentences %>%
+  head(5) %>%
+  str_split(" ", simplify = TRUE)
+```
+
+
+```{r}
+x <- "This is a sentence. This is another sentence."
+str_view_all(x, boundary("word"))
+```
+
+
+
+
+
+
+
+
+
+

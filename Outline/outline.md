@@ -23,12 +23,13 @@ I’ll find an external data set and implement the methods I’ve learned.
     regression trees and model trees (pps. 200-216) (Chapter 6 MLwR)
     \&Black Box Methods - Neural Networks and Support Vector Machines
     (Chapter 7 MLwR)
-6.  Strings with stringr (Chapter 11 r4ds) & Finding Patterns - Market
-    Basket Analysis Using Association Rules (Chapter 8 MLwR)
-7.  factors with forcats (Chapter 12 r4ds) & Evaluating Model
-    Performance (Chapter 10 MLwR)
-8.  Dates and Times with lubridate (Chapter 13 r4ds) & Improving Model
-    Performance (Chapter 11 MLwR)
+6.  five interviews in three days (\!\!) & Finding Patterns - Market
+    Basket Analysis Using Association Rules (Chapter 8 MLwR) (some)
+7.  Strings with stringr (Chapter 11 r4ds) & Finding Patterns - Market
+    Basket Analysis Using Association Rules (Chapter 8 MLwR) (finish)
+8.  factors with forcats (Chapter 12 r4ds) & Evaluating Model
+    Performance (Chapter 10 MLwR) & Dates and Times with lubridate
+    (Chapter 13 r4ds) & Improving Model Performance (Chapter 11 MLwR)
 9.  Pipes with magrittr (Chapter 14 r4ds) & Specialized Machine Learning
     Topics (Chapter 12 MLwR)
 10. Functions (Chapter 15 r4ds) & Vectors (Chapter 16 r4ds)
