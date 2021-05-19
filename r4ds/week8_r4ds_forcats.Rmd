@@ -1,0 +1,242 @@
+---
+title: "Factors with forcats"
+author: "Emma Grossman"
+date: "5/19/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forcats)
+```
+
+Factors are used for categorical variables and were historically must easier to work with than characters. For this reason, base R will sometimes automatically convert strings to factors: `stringsAsFactors` style.
+
+# Creating Factors
+
+```{r}
+x1 <- c("Dec", "Apr", "Jan", "Mar")
+x2 <- c("Dec", "Apr", "Jam", "Mar")
+```
+
+Using a string could result in: (1) typos and (2) it doesn't sort in a useful way.
+
+```{r}
+sort(x1)
+```
+
+These problems can be fixed with a factor.
+```{r}
+month_levels <- c(
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
+y1 <- factor(x1, levels = month_levels)
+y1
+sort(y1)
+```
+
+
+```{r}
+y2 <- factor(x2, levels = month_levels)
+y2
+
+y2 <- parse_factor(x2, levels = month_levels)
+```
+
+
+```{r}
+# alphabetical
+factor(x1)
+```
+
+```{r}
+# order of appearance
+f1 <- factor(x1, unique(x1))
+f1
+
+# order of appearance (after the fact)
+f2 <- x1 %>% factor %>% fct_inorder()
+f2
+```
+
+
+## General Social Survey
+
+```{r}
+gss_cat
+```
+
+
+```{r}
+gss_cat %>%
+  count(race)
+
+ggplot(gss_cat, aes(race))+
+  geom_bar()
+```
+
+```{r}
+# ggplot drops levels w/o values but we can force them to display
+
+ggplot(gss_cat, aes(race))+
+  geom_bar()+
+  scale_x_discrete(drop = FALSE)
+```
+
+
+## Modifying Factor Order
+
+```{r}
+relig <- gss_cat %>%
+  group_by(relig) %>%
+  summarize(
+    age = mean(age, na.rm = TRUE),
+    tvhours = mean(tvhours, na.rm = TRUE),
+    n = n()
+  )
+
+ggplot(relig, aes(tvhours, relig)) + geom_point()
+```
+
+```{r}
+ggplot(relig, aes(tvhours, fct_reorder(relig, tvhours))) + geom_point()
+```
+
+
+```{r}
+relig %>%
+  mutate(relig = fct_reorder(relig, tvhours)) %>%
+  ggplot(aes(tvhours, relig))+
+  geom_point()
+```
+
+```{r}
+rincome <- gss_cat %>%
+  group_by(rincome) %>%
+  summarize(
+    age = mean(age, na.rm = TRUE),
+    tvhours = mean(tvhours, na.rm = TRUE),
+    n = n()
+  )
+
+ggplot(rincome, aes(age, fct_reorder(rincome, age)))+
+  geom_point()
+```
+
+Not a good idea, because there is an inherent ordering to income. But, we may want to pull not applicable to the front.
+
+```{r}
+ggplot(rincome, aes(age, fct_relevel(rincome, "Not applicable")))+
+  geom_point()
+```
+
+> `fct_reorder2()` reorders the factor by the y values associated with the largest x values. This makes the plot easier to read because the line colors line up with the legend:
+
+```{r}
+by_age <- gss_cat %>%
+  filter(!is.na(age)) %>%
+  count(age, marital) %>%
+  group_by(age) %>%
+  mutate(prop = n / sum(n))
+
+ggplot(by_age, aes(age, prop, colour = marital)) +
+  geom_line(na.rm = TRUE)
+
+ggplot(by_age, aes(age, prop, colour = fct_reorder2(marital, age, prop))) +
+  geom_line() +
+  labs(colour = "marital")
+```
+
+
+```{r}
+gss_cat %>%
+  mutate(marital = marital %>% fct_infreq() %>% fct_rev()) %>%
+  ggplot(aes(marital))+
+  geom_bar()
+```
+
+
+## Modifying Factor Levels
+
+`fct_recode()` is super helpful.
+
+```{r}
+gss_cat %>%
+  count(partyid)
+```
+
+
+```{r}
+gss_cat %>%
+  mutate(partyid = fct_recode(partyid,
+    "Republican, strong"    = "Strong republican",
+    "Republican, weak"      = "Not str republican",
+    "Independent, near rep" = "Ind,near rep",
+    "Independent, near dem" = "Ind,near dem",
+    "Democrat, weak"        = "Not str democrat",
+    "Democrat, strong"      = "Strong democrat"
+  )) %>%
+  count(partyid)
+```
+
+```{r}
+gss_cat %>%
+  mutate(partyid = fct_recode(partyid,
+    "Republican, strong"    = "Strong republican",
+    "Republican, weak"      = "Not str republican",
+    "Independent, near rep" = "Ind,near rep",
+    "Independent, near dem" = "Ind,near dem",
+    "Democrat, weak"        = "Not str democrat",
+    "Democrat, strong"      = "Strong democrat",
+    "Other"                 = "No answer",
+    "Other"                 = "Don't know",
+    "Other"                 = "Other party"
+  )) %>%
+  count(partyid)
+```
+
+
+```{r}
+gss_cat %>%
+  mutate(partyid = fct_collapse(partyid,
+    other = c("No answer", "Don't know", "Other party"),
+    rep = c("Strong republican", "Not str republican"),
+    ind = c("Ind,near rep", "Independent", "Ind,near dem"),
+    dem = c("Not str democrat", "Strong democrat")
+  )) %>%
+  count(partyid)
+```
+
+
+```{r}
+gss_cat %>%
+  mutate(relig = fct_lump(relig)) %>%
+  count(relig)
+```
+
+
+```{r}
+gss_cat %>%
+  mutate(relig = fct_lump(relig, n = 10)) %>%
+  count(relig, sort = TRUE) %>%
+  print(n = Inf)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
