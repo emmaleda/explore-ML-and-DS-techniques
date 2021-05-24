@@ -1,0 +1,340 @@
+---
+title: "Dates and Times with lubridate"
+author: "Emma Grossman"
+date: "5/24/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(nycflights13)
+```
+
+## Creating Date/Times
+
+When looking at date/time data we have three options (1) a date, (2) a time, or (3) a date-time. R doesn't have a base class for storing times, so the `hms` packages functions well. 
+
+Good practice is to always uses the simplest measure of time as possible. 
+
+```{r}
+today()
+now()
+```
+
+### From Strings
+
+A date/time generally is created via a string, from individual date-time components or from existing date/time object. 
+
+```{r}
+ymd("2017-01-31")
+mdy("January 31st, 2017")
+dmy("31-Jan-2017")
+ymd(20170131)
+```
+
+The above functions create dates, but we can also create date/times. 
+
+```{r}
+ymd_hms("2017-01-31 20:11:59")
+mdy_hm("01/31/2017 08:01")
+```
+
+> You can also force the creation of a date-time from a date by supplying a time zone:
+
+```{r}
+ymd(20170131, tz = "UTC")
+```
+
+### From Individual Components
+
+```{r}
+flights %>%
+  select(year, month, day, hour, minute)
+```
+
+We can combine all of these elements into a date/time.
+
+```{r}
+flights %>%
+  select(year, month, day, hour, minute) %>%
+  mutate(
+    departure = make_datetime(year, month, day, hour, minute)
+  )
+```
+
+
+
+```{r}
+make_datetime_100 <- function(year, month, day, time) {
+  make_datetime(year, month, day, time %/% 100, time %% 100)
+}
+
+flights_dt <- flights %>% 
+  filter(!is.na(dep_time), !is.na(arr_time)) %>% 
+  mutate(
+    dep_time = make_datetime_100(year, month, day, dep_time),
+    arr_time = make_datetime_100(year, month, day, arr_time),
+    sched_dep_time = make_datetime_100(year, month, day, sched_dep_time),
+    sched_arr_time = make_datetime_100(year, month, day, sched_arr_time)
+  ) %>% 
+  select(origin, dest, ends_with("delay"), ends_with("time"))
+
+flights_dt
+```
+
+
+```{r}
+flights_dt %>%
+  ggplot(aes(dep_time))+
+  geom_freqpoly(binwidth = 86400) # 86400 seconds = 1 day
+```
+
+
+```{r}
+flights_dt %>%
+  filter(dep_time < ymd(20130102)) %>%
+  ggplot(aes(dep_time)) +
+  geom_freqpoly(binwidth = 600) # 10 minutes
+```
+
+For date-times, 1 = 1 second. For dates, 1 = 1 day. 
+
+### From Other Types
+
+We can switch between dates and date/times.
+```{r}
+as_datetime(today())
+as_date(now())
+```
+
+## Date-Time Components
+
+### Getting Components
+
+We can extract components from a date-time object.
+```{r}
+datetime <- ymd_hms("2016-07-08 12:34:56")
+
+year(datetime)
+month(datetime)
+mday(datetime) # day of the month
+yday(datetime) # day of the year
+wday(datetime) # day of the week
+
+month(datetime, label = TRUE)
+wday(datetime, label = TRUE, abbr = FALSE)
+```
+
+
+```{r}
+flights_dt %>%
+  mutate(wday = wday(dep_time, label = TRUE)) %>%
+  ggplot(aes(x = wday)) +
+  geom_bar()
+```
+
+```{r}
+flights_dt %>% 
+  mutate(minute = minute(dep_time)) %>% 
+  group_by(minute) %>% 
+  summarise(
+    avg_delay = mean(arr_delay, na.rm = TRUE),
+    n = n()) %>% 
+  ggplot(aes(minute, avg_delay)) +
+    geom_line()
+```
+
+
+```{r}
+sched_dep <- flights_dt %>% 
+  mutate(minute = minute(sched_dep_time)) %>% 
+  group_by(minute) %>% 
+  summarise(
+    avg_delay = mean(arr_delay, na.rm = TRUE),
+    n = n())
+
+ggplot(sched_dep, aes(minute, avg_delay)) +
+  geom_line()
+```
+
+
+```{r}
+ggplot(sched_dep, aes(minute, n)) +
+  geom_line()
+```
+
+### Rounding
+
+`floor_date()`, `round_date()`, and `ceiling_date()` can be used to round a date to a nearby time.
+
+```{r}
+flights_dt %>% 
+  count(week = floor_date(dep_time, "week")) %>% 
+  ggplot(aes(week, n)) +
+    geom_line()
+```
+
+### Setting Components
+
+```{r}
+(datetime <- ymd_hms("2016-07-08 12:34:56"))
+
+year(datetime) <- 2020
+datetime
+month(datetime) <- 01
+datetime
+hour(datetime) <- hour(datetime) + 1
+datetime
+```
+
+```{r}
+update(datetime, year = 2020, month = 2, mday = 2, hour = 2)
+```
+
+```{r}
+ymd("2015-02-01") %>% 
+  update(mday = 30)
+ymd("2015-02-01") %>% 
+  update(hour = 400)
+```
+
+```{r}
+flights_dt %>% 
+  mutate(dep_hour = update(dep_time, yday = 1)) %>% 
+  ggplot(aes(dep_hour)) +
+    geom_freqpoly(binwidth = 300)
+```
+
+## Time Spans
+
+- **durations** - exact number of seconds
+- **periods** - human units like weeks and months
+- **intervals** - starting and ending point
+
+### Durations
+
+When we subtract two dates, we get a difftime object.
+```{r}
+today() - ymd(19960905) # how old in days
+
+as.duration(today() - ymd(19960905))
+```
+
+```{r}
+dseconds(15)
+dminutes(10)
+dhours(c(12, 24))
+ddays(0:5)
+dweeks(3)
+dyears(1)
+```
+
+```{r}
+2 * dyears(1)
+dyears(1) + dweeks(12) + dhours(15)
+```
+
+```{r}
+tomorrow <- today() + ddays(1)
+last_year <- today() - dyears(1)
+```
+
+
+```{r}
+one_pm <- ymd_hms("2016-03-12 13:00:00", tz = "America/New_York")
+
+one_pm
+one_pm + ddays(1)
+```
+
+### Periods
+
+```{r}
+one_pm
+one_pm + days(1)
+```
+
+```{r}
+seconds(15)
+minutes(10)
+hours(c(12, 24))
+days(7)
+months(1:6)
+weeks(3)
+years(1)
+```
+
+```{r}
+10 * (months(6) + days(1))
+days(50) + hours(25) + minutes(2)
+```
+
+```{r}
+# A leap year
+ymd("2016-01-01") + dyears(1)
+ymd("2016-01-01") + years(1)
+
+# Daylight Savings Time
+one_pm + ddays(1)
+one_pm + days(1)
+```
+
+```{r}
+flights_dt %>% 
+  filter(arr_time < dep_time)
+```
+
+
+```{r}
+flights_dt <- flights_dt %>% 
+  mutate(
+    overnight = arr_time < dep_time,
+    arr_time = arr_time + days(overnight * 1),
+    sched_arr_time = sched_arr_time + days(overnight * 1)
+  )
+```
+
+```{r}
+flights_dt %>% 
+  filter(overnight, arr_time < dep_time) 
+```
+
+### Intervals
+
+```{r}
+years(1) / days(1)
+```
+
+```{r}
+next_year <- today() + years(1)
+(today() %--% next_year) / ddays(1)
+```
+
+```{r}
+(today() %--% next_year) %/% days(1)
+```
+
+### Time Zones
+```{r}
+Sys.timezone()
+```
+
+```{r}
+(x1 <- ymd_hms("2015-06-01 12:00:00", tz = "America/New_York"))
+(x2 <- ymd_hms("2015-06-01 18:00:00", tz = "Europe/Copenhagen"))
+(x3 <- ymd_hms("2015-06-02 04:00:00", tz = "Pacific/Auckland"))
+```
+
+```{r}
+x1 - x2
+x1 - x3
+```
+
+```{r}
+x4 <- c(x1, x2, x3)
+x4
+```
+
