@@ -1,0 +1,74 @@
+---
+title: "Pipes with magrittr"
+author: "Emma Grossman"
+date: "5/26/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The pipe character `%>%` comes from Stefan Milton's package, `magrittr`. The package isn't loaded automatically, but the character is.
+
+```{r}
+library(tidyverse)
+library(magrittr)
+```
+
+Big picture: the pipe character helps to make code easily writable and readable. 
+
+```{r}
+diamonds <- ggplot2::diamonds
+diamonds2 <- diamonds %>%
+  dplyr::mutate(price_per_carat = price / carat)
+```
+
+Using `magrittr`: 
+```{r eval = FALSE}
+foo_foo %>%
+  hop(through = forest) %>%
+  scoop(up = field_mice) %>%
+  bop(on = head)
+```
+
+
+Behind the scenes, `magrittr` does something like this:
+```{r eval = FALSE}
+my_pipe <- function(.) {
+  . <- hop(., through = forest)
+  . <- scoop(., up = field_mice)
+  bop(., on = head)
+}
+my_pipe(foo_foo)
+```
+
+The pipe doesn't work with functions that utilize the current environment, like `assign()`, `get()`, and `load()`, or functions that use lazy evaluation, like `tryCatch()`. 
+
+There is also the "tee" pipe, `%T>%`, which returns the lefthand side rather than the righthand. 
+
+```{r}
+rnorm(100) %>%
+  matrix(ncol = 2) %>%
+  plot() %>%
+  str()
+
+rnorm(100) %>%
+  matrix(ncol = 2) %T>%
+  plot() %>%
+  str()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
