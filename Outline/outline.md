@@ -32,5 +32,6 @@ I’ll find an external data set and implement the methods I’ve learned.
 9.  Dates and Times with lubridate (Chapter 13 r4ds) & Pipes with
     magrittr (Chapter 14 r4ds) & Improving Model Performance (Chapter 11
     MLwR)
-10. Functions (Chapter 15 r4ds) & Vectors (Chapter 16 r4ds) &
-    Specialized Machine Learning Topics (Chapter 12 MLwR)
+10. <https://adv-r.hadley.nz/functions.html> & tidy models: Functions
+    (Chapter 15 r4ds) & Vectors (Chapter 16 r4ds) & Specialized Machine
+    Learning Topics (Chapter 12 MLwR)
