@@ -1,0 +1,308 @@
+---
+title: "Tidymodels"
+author: "Emma Grossman"
+date: "6/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidymodels)  # for the parsnip package, along with the rest of tidymodels
+
+# Helper packages
+library(readr)       # for importing data
+library(broom.mixed) # for converting bayesian models to tidy tibbles
+library(dotwhisker)  # for visualizing regression results
+```
+# 1. Build a Model
+```{r}
+urchins <-
+  # Data were assembled for a tutorial 
+  # at https://www.flutterbys.com.au/stats/tut/tut7.5a.html
+  read_csv("https://tidymodels.org/start/models/urchins.csv") %>% 
+  # Change the names to be a little more verbose
+  setNames(c("food_regime", "initial_volume", "width")) %>% 
+  # Factors are very helpful for modeling, so we convert one column
+  mutate(food_regime = factor(food_regime, levels = c("Initial", "Low", "High")))
+```
+
+```{r}
+urchins
+```
+
+```{r}
+ggplot(urchins,
+       aes(x = initial_volume, 
+           y = width, 
+           group = food_regime, 
+           col = food_regime)) + 
+  geom_point() + 
+  geom_smooth(method = lm, se = FALSE) +
+  scale_color_viridis_d(option = "plasma", end = .7)
+```
+
+```{r}
+lm_mod <- 
+  linear_reg() %>% 
+  set_engine("lm")
+```
+
+
+```{r}
+lm_fit <- 
+  lm_mod %>% 
+  fit(width ~ initial_volume * food_regime, data = urchins)
+lm_fit
+```
+
+```{r}
+tidy(lm_fit) %>% 
+  dwplot(dot_args = list(size = 2, color = "black"),
+         whisker_args = list(color = "black"),
+         vline = geom_vline(xintercept = 0, colour = "grey50", linetype = 2))
+
+```
+
+```{r}
+new_points <- expand.grid(initial_volume = 20, 
+                          food_regime = c("Initial", "Low", "High"))
+new_points
+```
+
+```{r}
+mean_pred <- predict(lm_fit, new_data = new_points)
+mean_pred
+```
+
+```{r}
+conf_int_pred <- predict(lm_fit, 
+                         new_data = new_points, 
+                         type = "conf_int")
+conf_int_pred
+
+# Now combine: 
+plot_data <- 
+  new_points %>% 
+  bind_cols(mean_pred) %>% 
+  bind_cols(conf_int_pred)
+
+# and plot:
+ggplot(plot_data, aes(x = food_regime)) + 
+  geom_point(aes(y = .pred)) + 
+  geom_errorbar(aes(ymin = .pred_lower, 
+                    ymax = .pred_upper),
+                width = .2) + 
+  labs(y = "urchin size")
+
+```
+
+```{r}
+urchins %>% 
+  group_by(food_regime) %>% 
+  summarize(med_vol = median(initial_volume))
+```
+
+```{r}
+ggplot(urchins,
+       aes(initial_volume, width)) +      # returns a ggplot object 
+  geom_jitter() +                         # same
+  geom_smooth(method = lm, se = FALSE) +  # same                    
+  labs(x = "Volume", y = "Width")         # etc
+
+```
+
+# 2. Preprocess your data with recipes
+
+```{r}
+library(tidymodels)      # for the recipes package, along with the rest of tidymodels
+
+# Helper packages
+library(nycflights13)    # for flight data
+# install.packages("skimr")
+library(skimr)           # for variable summaries
+```
+
+```{r}
+set.seed(123)
+
+flight_data <- 
+  flights %>% 
+  mutate(
+    # Convert the arrival delay to a factor
+    arr_delay = ifelse(arr_delay >= 30, "late", "on_time"),
+    arr_delay = factor(arr_delay),
+    # We will use the date (not date-time) in the recipe below
+    date = as.Date(time_hour)
+  ) %>% 
+  # Include the weather data
+  inner_join(weather, by = c("origin", "time_hour")) %>% 
+  # Only retain the specific columns we will use
+  select(dep_time, flight, origin, dest, air_time, distance, 
+         carrier, date, arr_delay, time_hour) %>% 
+  # Exclude missing data
+  na.omit() %>% 
+  # For creating models, it is better to have qualitative columns
+  # encoded as factors (instead of character strings)
+  mutate_if(is.character, as.factor)
+
+```
+
+```{r}
+flight_data %>% 
+  count(arr_delay) %>% 
+  mutate(prop = n/sum(n))
+```
+
+```{r}
+glimpse(flight_data)
+```
+
+```{r}
+flight_data %>% 
+  skimr::skim(dest, carrier) 
+```
+
+```{r}
+# Fix the random numbers by setting the seed 
+# This enables the analysis to be reproducible when random numbers are used 
+set.seed(555)
+# Put 3/4 of the data into the training set 
+data_split <- initial_split(flight_data, prop = 3/4)
+
+# Create data frames for the two sets:
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+```
+
+```{r}
+flights_rec <- 
+  recipe(arr_delay ~ ., data = train_data) %>% 
+  update_role(flight, time_hour, new_role = "ID") 
+
+```
+
+```{r}
+summary(flights_rec)
+```
+
+```{r}
+flight_data %>% 
+  distinct(date) %>% 
+  mutate(numeric_date = as.numeric(date)) 
+```
+
+
+```{r}
+flights_rec <- 
+  recipe(arr_delay ~ ., data = train_data) %>% 
+  update_role(flight, time_hour, new_role = "ID") %>% 
+  step_date(date, features = c("dow", "month")) %>%               
+  step_holiday(date, holidays = timeDate::listHolidays("US")) %>% 
+  step_rm(date)
+```
+
+> Create dummy variables for all of the factor or character columns unless they are outcomes:
+
+```{r}
+flights_rec <- 
+  recipe(arr_delay ~ ., data = train_data) %>% 
+  update_role(flight, time_hour, new_role = "ID") %>% 
+  step_date(date, features = c("dow", "month")) %>% 
+  step_holiday(date, holidays = timeDate::listHolidays("US")) %>% 
+  step_rm(date) %>% 
+  step_dummy(all_nominal(), -all_outcomes())
+```
+
+```{r}
+test_data %>% 
+  distinct(dest) %>% 
+  anti_join(train_data)
+```
+
+```{r}
+flights_rec <- 
+  recipe(arr_delay ~ ., data = train_data) %>% 
+  update_role(flight, time_hour, new_role = "ID") %>% 
+  step_date(date, features = c("dow", "month")) %>% 
+  step_holiday(date, holidays = timeDate::listHolidays("US")) %>% 
+  step_rm(date) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_predictors())
+
+```
+
+```{r}
+lr_mod <- 
+  logistic_reg() %>% 
+  set_engine("glm")
+```
+
+```{r}
+flights_wflow <- 
+  workflow() %>% 
+  add_model(lr_mod) %>% 
+  add_recipe(flights_rec)
+flights_wflow
+```
+
+```{r}
+flights_fit <- 
+  flights_wflow %>% 
+  fit(data = train_data)
+
+```
+
+
+```{r}
+flights_fit %>% 
+  pull_workflow_fit() %>% 
+  tidy()
+```
+
+
+```{r}
+predict(flights_fit, test_data)
+```
+
+```{r}
+flights_pred <- 
+  predict(flights_fit, test_data, type = "prob") %>% 
+  bind_cols(test_data %>% select(arr_delay, time_hour, flight)) 
+
+# The data look like: 
+flights_pred
+```
+
+```{r}
+flights_pred %>% 
+  roc_curve(truth = arr_delay, .pred_late) %>% 
+  autoplot()
+```
+
+```{r}
+flights_pred %>% 
+  roc_auc(truth = arr_delay, .pred_late)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
