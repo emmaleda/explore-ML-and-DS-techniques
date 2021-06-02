@@ -1,0 +1,401 @@
+---
+title: 'Advanced R: Vectors'
+author: "Emma Grossman"
+date: "6/1/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 3.2 Atomic vectors
+
+There are four types of atomic vectors: logical, integer, double, and character. Two other very rare types exist: complex and raw. 
+
+`c()` is short for combine.
+
+We can use `typeof()` to determine the type of a vector.
+
+```{r}
+lgl_var <- c(TRUE, FALSE)
+int_var <- c(1L, 6L, 10L)
+dbl_var <- c(1, 2.5, 4.5)
+chr_var <- c("these are", "some strings")
+
+typeof(lgl_var)
+```
+
+`NA` is used for missing data. It is infections: most operations including a `NA` value returns another `NA` value, with a few exceptions.
+
+```{r}
+NA > 5
+10 * NA
+!NA
+```
+
+The exceptions:
+```{r}
+NA ^ 0
+NA | TRUE
+NA & FALSE
+```
+
+We use `is.na()` to test for missingness rather than `something == NA`.
+
+If we attempt to combine vectors of different types, coercion occurs. 
+
+```{r}
+str(c("a", 1))
+```
+
+```{r}
+x <- c(FALSE, FALSE, TRUE)
+as.numeric(x)
+
+# Total number of TRUEs
+sum(x)
+
+# Proportion that are TRUE
+mean(x)
+```
+
+```{r}
+as.integer(c("1", "1.5", "a"))
+```
+
+## 3.3 Attributes
+
+Matrices, arrays, factors, and date-times are data structures built on vectors using attributes.
+
+Attributes attach metadata to data.
+
+```{r}
+a <- 1:3
+attr(a, "x") <- "abcdef"
+attr(a, "x")
+
+attr(a, "y") <- 4:6
+str(attributes(a))
+
+# Or equivalently
+a <- structure(
+  1:3, 
+  x = "abcdef",
+  y = 4:6
+)
+str(attributes(a))
+```
+
+Only two attributes are maintained: **names** and **dim**
+
+Three ways to create names are:
+```{r}
+# When creating it: 
+x <- c(a = 1, b = 2, c = 3)
+
+# By assigning a character vector to names()
+x <- 1:3
+names(x) <- c("a", "b", "c")
+
+# Inline, with setNames():
+x <- setNames(1:3, c("a", "b", "c"))
+```
+
+
+We can remove names with `x <- unname(x)` or with `names(x) <- NULL`.
+
+```{r}
+str(1:3)                   # 1d vector
+str(matrix(1:3, ncol = 1)) # column vector
+str(matrix(1:3, nrow = 1)) # row vector
+str(array(1:3, 3))         # "array" vector
+```
+
+## 3.4 S3 atomic vectors
+
+> One of the most important vector attributes is class, which underlies the S3 object system. Having a class attribute turns an object into an S3 object, which means it will behave differently from a regular vector when passed to a generic function. Every S3 object is built on top of a base type, and often stores additional information in other attributes.
+
+There are four important S3 atomic vectors in R: factor vectors, date vectors, date-time vectors, and duration (difftime) vectors. 
+
+Factor vectors must only contain a set of predefined values and they are built from integer vectors (with class and levels).
+
+```{r}
+x <- factor(c("a", "b", "b", "a"))
+x
+
+typeof(x)
+attributes(x)
+```
+
+```{r}
+sex_char <- c("m", "m", "m")
+sex_factor <- factor(sex_char, levels = c("m", "f"))
+
+table(sex_char)
+table(sex_factor)
+```
+
+There is a subset of factors called ordered factors, in which the levels of the factor have an inherent ordering. Low, medium, and high, for example.
+
+```{r}
+grade <- ordered(c("b", "b", "a", "c"), levels = c("c", "b", "a"))
+grade
+```
+
+Date vectors derive from double vectors and they have an attribute class of date.
+
+```{r}
+today <- Sys.Date()
+
+typeof(today)
+attributes(today)
+```
+
+```{r}
+date <- as.Date("1980-02-01")
+unclass(date)
+```
+
+When we unclass a date, it provides the number of days since 1970-01-01.
+
+A duration vector is built on a double, with a `unit` attribute.
+
+```{r}
+one_week_1 <- as.difftime(1, units = "weeks")
+one_week_1
+
+typeof(one_week_1)
+attributes(one_week_1)
+
+one_week_2 <- as.difftime(7, units = "days")
+one_week_2
+
+typeof(one_week_2)
+attributes(one_week_2)
+```
+
+## 3.5 Lists
+
+Lists are complex because elements can be of any type (*technically* elements of a list are the same type because they are references).
+
+```{r}
+l1 <- list(
+  1:3, 
+  "a", 
+  c(TRUE, FALSE, TRUE), 
+  c(2.3, 5.9)
+)
+
+typeof(l1)
+
+str(l1)
+```
+
+Lists are often smaller than we think they are.
+```{r}
+lobstr::obj_size(mtcars)
+
+l2 <- list(mtcars, mtcars, mtcars, mtcars)
+lobstr::obj_size(l2)
+```
+
+Lists can contain other lists:
+```{r}
+l3 <- list(list(list(1)))
+str(l3)
+```
+
+We can use dimension to create list-matrices and list-arrays
+
+```{r}
+l <- list(1:3, "a", TRUE, 1.0)
+dim(l) <- c(2, 2)
+l
+
+l[[1, 1]]
+```
+
+## 3.6 Data frames and tibbles
+
+Data frames are a named list vector with attributes `names`, `row.names` and a class of `data.frame`.
+
+```{r}
+df1 <- data.frame(x = 1:3, y = letters[1:3])
+typeof(df1)
+
+attributes(df1)
+```
+
+Each column of a data frame is restricted to be the same length.
+
+A Tibble is a modern reimagination of the data frame.
+
+> A concise, and fun, way to summarise the main differences is that tibbles are lazy and surly: they do less and complain more. 
+
+```{r}
+library(tibble)
+
+df2 <- tibble(x = 1:3, y = letters[1:3])
+typeof(df2)
+
+attributes(df2)
+```
+
+```{r}
+df <- data.frame(
+  x = 1:3, 
+  y = c("a", "b", "c")
+)
+str(df)
+```
+
+```{r}
+df1 <- data.frame(
+  x = 1:3,
+  y = c("a", "b", "c"),
+  stringsAsFactors = FALSE
+)
+str(df1)
+```
+
+Tibbles will never coerce their input.
+```{r}
+df2 <- tibble(
+  x = 1:3, 
+  y = c("a", "b", "c")
+)
+str(df2)
+```
+
+Data frames will change the name of columns that are non-syntactic, tibbles do not.
+
+```{r}
+names(data.frame(`1` = 1))
+
+names(tibble(`1` = 1))
+```
+
+If an element of a data frame or tibble has a shorter length, it will be recycled. Data frames recycle for any shorter length variable, but tibbles will only recyle if a the shorter variable is of length 1. 
+```{r error = TRUE}
+data.frame(x = 1:4, y = 1:2)
+data.frame(x = 1:4, y = 1:3)
+
+tibble(x = 1:4, y = 1)
+tibble(x = 1:4, y = 1:2)
+```
+
+One final difference is that tibbles allow the user to create new variables using newly created variables, for example:
+
+```{r}
+tibble(
+  x = 1:3,
+  y = x * 2 # x was just created
+)
+```
+
+We can have row names.
+```{r}
+df3 <- data.frame(
+  age = c(35, 27, 18),
+  hair = c("blond", "brown", "black"),
+  row.names = c("Bob", "Susan", "Sam")
+)
+df3
+```
+
+
+```{r}
+rownames(df3)
+
+df3["Bob", ]
+```
+
+Matrices are transposeable, data frames are not. It is best to avoid row names, they are an added complication.
+
+```{r}
+df3[c(1, 1, 1), ]
+```
+
+So, tibbles do not support row names.
+
+```{r}
+as_tibble(df3, rownames = "name")
+```
+
+```{r}
+dplyr::starwars
+```
+
+I've definitely run into this issue before:
+> When you subset columns with df[, vars], you will get a vector if vars selects one variable, otherwise you’ll get a data frame. This is a frequent source of bugs when using [ in a function, unless you always remember to use df[, vars, drop = FALSE].
+
+Another inconvenient subsetting behavior:
+> When you attempt to extract a single column with df$x and there is no column x, a data frame will instead select any variable that starts with x. If no variable starts with x, df$x will return NULL. This makes it easy to select the wrong variable or to select a variable that doesn’t exist.
+
+Tibbles modify this by only returning tibbles and they don't do partial matching.
+
+```{r error = TRUE}
+df1 <- data.frame(xyz = "a")
+df2 <- tibble(xyz = "a")
+
+str(df1$x)
+str(df2$x)
+```
+
+Data frames can contain lists.
+
+```{r}
+df <- data.frame(x = 1:3)
+df$y <- list(1:2, 1:3, 1:4)
+
+data.frame(
+  x = 1:3, 
+  y = I(list(1:2, 1:3, 1:4))
+)
+```
+
+Tibbles make this a little easier:
+```{r}
+tibble(
+  x = 1:3, 
+  y = list(1:2, 1:3, 1:4)
+)
+```
+
+It is possible to have a matrix or array as column of data.
+
+```{r}
+dfm <- data.frame(
+  x = 1:3 * 10
+)
+dfm$y <- matrix(1:9, nrow = 3)
+dfm$z <- data.frame(a = 3:1, b = letters[1:3], stringsAsFactors = FALSE)
+
+str(dfm)
+dfm[1, ]
+```
+
+## 3.7 `NULL`
+
+> NULL is special because it has a unique type, is always length zero, and can’t have any attributes:
+
+```{r error = TRUE}
+typeof(NULL)
+
+length(NULL)
+
+x <- NULL
+attr(x, "y") <- 1
+```
+
+```{r}
+is.null(NULL)
+```
+
+
+
+
+
+
+
